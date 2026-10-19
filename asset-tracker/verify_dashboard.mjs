@@ -107,6 +107,9 @@ const script = `(async () => {
 })()`
 
 const r = await send('Runtime.evaluate', { expression: script, awaitPromise: true, returnByValue: true })
+if (r.result?.exceptionDetails) {
+  console.log('页面内异常:', JSON.stringify(r.result.exceptionDetails.exception?.description || r.result.exceptionDetails))
+}
 const value = r.result?.result?.value
 if (!value) {
   console.log('执行失败:', JSON.stringify(r.result?.exceptionDetails || r.result))

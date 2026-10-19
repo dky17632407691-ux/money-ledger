@@ -1,4 +1,4 @@
-import * as store from './store.js?v=20261019h'
+import * as store from './store.js?v=20261019i'
 import {
   state, categoriesOf, ACCOUNT_TYPES, SUBTYPES, typeMeta, notifyChange,
   loadAll, refreshQuotes, requestRender, holdingsOfAccount, accountById,
@@ -6,18 +6,18 @@ import {
   holdingPrice, holdingMarketValue, holdingProfit, holdingDayProfit,
   buildOpeningTrade, fxRate, holdingCurrency,
   goal, saveGoal,
-} from './state.js?v=20261019h'
+} from './state.js?v=20261019i'
 import {
   MARKET_GROUPS, groupOfMarket, normalizeSymbol, marketOf, lookupSymbol,
   displayCode, CURRENCY_SYMBOL, currencyOf,
-} from './quotes.js?v=20261019h'
+} from './quotes.js?v=20261019i'
 import {
   openSheet, toastOk, toastErr, describeError, confirmDialog, setBusy,
-} from './ui.js?v=20261019h'
+} from './ui.js?v=20261019i'
 import {
   escapeHtml, html, parseAmount, toNumber, todayISO, PALETTE, colorByName,
   safeColor, formatAmount, formatSigned, friendlyDate,
-} from './util.js?v=20261019h'
+} from './util.js?v=20261019i'
 
 /* ============================================================
    各类表单弹层

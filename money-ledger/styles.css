@@ -944,9 +944,13 @@ ul { margin: 0; padding: 0; list-style: none; }
   font-size: 31px; font-weight: 700; letter-spacing: -.5px; line-height: 1.25; margin-top: 2px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.nw-day { text-align: right; flex: 0 0 auto; max-width: 46%; }
+.nw-day {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+  text-align: right; flex: 0 0 auto; max-width: 48%;
+}
+.nw-day__block { min-width: 0; }
 .nw-day__label { font-size: 12.5px; color: var(--text-2); }
-.nw-day__value { font-size: 19px; font-weight: 700; margin-top: 2px; }
+.nw-day__value { font-size: 18px; font-weight: 700; margin-top: 2px; line-height: 1.2; }
 .nw-day__pct { font-size: 12px; margin-top: 1px; }
 .nw-card__body.is-collapsed { display: none; }
 .nw-section { margin-top: 14px; }

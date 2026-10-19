@@ -1,21 +1,21 @@
-import { cloud } from './cloud.js?v=20261019h'
-import * as store from './store.js?v=20261019h'
+import { cloud } from './cloud.js?v=20261019i'
+import * as store from './store.js?v=20261019i'
 import {
   state, loadAll, ensureDefaultCategories, setChangeListener, setRenderListener,
   setNavigator, setLogoutHandler, recordTodaySnapshot, activeAccounts,
   refreshQuotes, ensureOpeningTrades, openHoldings,
-} from './state.js?v=20261019h'
-import { PAGES } from './views.js?v=20261019h'
-import { reflowCharts } from './charts.js?v=20261019h'
-import { openRecordSheet } from './sheets.js?v=20261019h'
+} from './state.js?v=20261019i'
+import { PAGES } from './views.js?v=20261019i'
+import { reflowCharts } from './charts.js?v=20261019i'
+import { openRecordSheet } from './sheets.js?v=20261019i'
 import {
   toastOk, toastErr, describeError, setBusy, skeletonCard,
-} from './ui.js?v=20261019h'
-import { escapeHtml, initialsOf, monthLabel, todayISO, debounce } from './util.js?v=20261019h'
+} from './ui.js?v=20261019i'
+import { escapeHtml, initialsOf, monthLabel, todayISO, debounce } from './util.js?v=20261019i'
 import {
   checkInvite, loadAllowlist, allowlistInfo, phoneOfUser,
   rememberPhone, rememberedPhone,
-} from './access.js?v=20261019h'
+} from './access.js?v=20261019i'
 
 /* ============================================================
    启动流程

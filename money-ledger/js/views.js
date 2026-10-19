@@ -11,23 +11,23 @@ import {
   accountCash, tradesOfHolding, holdingDays, firstTradeDate, isOpenHolding,
   fxRate, holdingCurrency, fxSummary, hasFxMissingHolding, holdingPrice,
   holdingFxMissing, goalProgress,
-} from './state.js?v=20261019h'
+} from './state.js?v=20261019i'
 import {
   mountDonut, mountBars, mountArea, mountMultiArea, legendHtml,
   multiLegendHtml, rankingHtml,
-} from './charts.js?v=20261019h'
+} from './charts.js?v=20261019i'
 import {
   openRecordSheet, openAccountSheet, openCategorySheet, removeCategory,
   openHelpSheet, openHoldingSheet, openTradeSheet, openTradesSheet,
   openGoalSheet,
-} from './sheets.js?v=20261019h'
-import { displayCode, marketLabel, CURRENCY_SYMBOL } from './quotes.js?v=20261019h'
-import { allowlistInfo, normalizePhone } from './access.js?v=20261019h'
-import { confirmDialog, toastOk, toastErr, describeError } from './ui.js?v=20261019h'
+} from './sheets.js?v=20261019i'
+import { displayCode, marketLabel, CURRENCY_SYMBOL } from './quotes.js?v=20261019i'
+import { allowlistInfo, normalizePhone } from './access.js?v=20261019i'
+import { confirmDialog, toastOk, toastErr, describeError } from './ui.js?v=20261019i'
 import {
   escapeHtml, formatAmount, formatCompact, formatSigned, monthLabel,
   shortMonthLabel, shiftMonth, friendlyDate, toNumber, currentMonthKey, initialsOf,
-} from './util.js?v=20261019h'
+} from './util.js?v=20261019i'
 
 /* ============================================================
    页面渲染
@@ -400,6 +400,17 @@ export function renderDashboard(pageEl) {
          <div class="nw-day__pct num ${cls}">${pctText}${arrow}</div>`
   }
 
+  // 总盈亏：持仓市值 − 成本（只统计填过成本价的持仓）
+  let profitHtml = '<div class="nw-day__value num t-muted">--</div>'
+  if (pf.profit !== null) {
+    const cls = pf.profit > 0 ? 't-up' : pf.profit < 0 ? 't-down' : 't-muted'
+    const pctText = pf.profitPct !== null ? `（${pf.profitPct >= 0 ? '+' : ''}${(pf.profitPct * 100).toFixed(2)}%）` : ''
+    profitHtml = nwMasked
+      ? '<div class="nw-day__value num">******</div>'
+      : `<div class="nw-day__value num ${cls}">${signedMoney(pf.profit)}</div>
+         ${pctText ? `<div class="nw-day__pct num ${cls}">${pctText}</div>` : ''}`
+  }
+
   const { balances } = netWorthSummary()
   const assetRows = nwAssetBuckets(balances)
   const liabilityRows = nwLiabilityBuckets(balances)
@@ -419,8 +430,14 @@ export function renderDashboard(pageEl) {
           <div class="nw-card__value num">${nwMasked ? '******' : formatAmount(netWorth)}</div>
         </div>
         <div class="nw-day">
-          <div class="nw-day__label">今日盈亏</div>
-          ${dayHtml}
+          <div class="nw-day__block">
+            <div class="nw-day__label">今日盈亏</div>
+            ${dayHtml}
+          </div>
+          <div class="nw-day__block">
+            <div class="nw-day__label">总盈亏</div>
+            ${profitHtml}
+          </div>
         </div>
       </div>
 
