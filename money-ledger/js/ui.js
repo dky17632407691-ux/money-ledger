@@ -1,4 +1,4 @@
-import { escapeHtml, html } from './util.js?v=20261019f'
+import { escapeHtml, html } from './util.js?v=20261019g'
 
 /* ---------------- Toast ---------------- */
 

@@ -73,16 +73,8 @@ const script = `(async () => {
 
   const views = await import('/js/views.js' + q)
 
-  // 目标与自选直接塞进 state（跳过云端写入），只为看排版
+  // 目标直接塞进 state（跳过云端写入），只为看排版；自选列表已按需求移除
   state.settings.goal = { target_amount: 5000000, passive_income: 1855.01, target_date: '2036-10-08', started_on: '2026-10-19' }
-  state.settings.watchlist = [
-    { market: 'us', symbol: 'AAPL', name: '苹果' },
-    { market: 'sz', symbol: '161128', name: '标普信息科技LOF' },
-  ]
-  state.watchQuotes = {
-    'usAAPL': { market: 'us', symbol: 'AAPL', name: '苹果', price: 343.46, changePct: 1.02 },
-    'sz161128': { market: 'sz', symbol: '161128', name: '标普信息科技LOF', price: 7.424, changePct: 0.32 },
-  }
 
   const page = document.createElement('div')
   page.className = 'page'
@@ -97,7 +89,7 @@ const script = `(async () => {
   const card = page.querySelector('.nw-card')
   out.cardText = card?.innerText
   out.goalText = page.querySelector('.goal-row')?.innerText
-  out.watchText = Array.from(page.querySelectorAll('.card')).find((c) => c.textContent.includes('自选列表'))?.innerText
+  out.watchGone = !page.textContent.includes('自选列表')
   out.overflow = []
   page.querySelectorAll('*').forEach((el) => {
     const r = el.getBoundingClientRect()
@@ -125,8 +117,7 @@ console.log(`=== 概览 · 净资产卡（模块版本 ${out.ver}，${out.innerW
 console.log(out.cardText)
 console.log('--- 目标卡片 ---')
 console.log(out.goalText || '(未渲染)')
-console.log('--- 自选列表 ---')
-console.log(out.watchText || '(未渲染)')
+console.log('自选列表已移除:', out.watchGone === true ? '是' : '否(仍在!)')
 console.log('--- 布局 ---')
 console.log(`docScrollW=${out.docScrollW} innerWidth=${out.innerWidth} overflowCount=${out.overflow.length}`)
 if (out.overflow.length) console.log(out.overflow.slice(0, 8).join('\n'))
@@ -152,15 +143,13 @@ const interact = `(() => {
   out2.maskPersisted = localStorage.getItem('ledger.nw.mask.v1')
   out2.expandPersisted = localStorage.getItem('ledger.nw.expand.v1')
 
-  // 弹层自测：目标表单 / 自选管理
+  // 弹层自测：目标表单；自选列表已移除，不应再有入口
   page.querySelector('.goal-card__item').click()
   out2.goalSheetTitle = document.querySelector('.sheet__title')?.textContent
   out2.goalFields = Array.from(document.querySelectorAll('.sheet .form-row label')).map((l) => l.textContent)
   document.querySelector('.sheet [data-act="cancel"]')?.click()
-  page.querySelector('[data-act="open-watch"]').click()
-  out2.watchSheetTitle = document.querySelector('.sheet__title')?.textContent
-  out2.watchMarkets = Array.from(document.querySelectorAll('#watch-market .segmented__btn')).map((b) => b.textContent)
-  document.querySelector('.sheet [data-act="cancel"]')?.click()
+  out2.watchEntryGone = !page.textContent.includes('自选列表')
+  out2.headerSubtitle = document.querySelector('#probe-page') ? Array.from(document.querySelectorAll('.topbar__sub, .topbar [class*=sub]')).map((e) => e.textContent)[0] || '' : ''
   return JSON.stringify(out2)
 })()`
 const r2 = await send('Runtime.evaluate', { expression: interact, returnByValue: true })

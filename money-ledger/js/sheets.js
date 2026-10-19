@@ -1,23 +1,23 @@
-import * as store from './store.js?v=20261019f'
+import * as store from './store.js?v=20261019g'
 import {
   state, categoriesOf, ACCOUNT_TYPES, SUBTYPES, typeMeta, notifyChange,
   loadAll, refreshQuotes, requestRender, holdingsOfAccount, accountById,
   accountLabel, accountCash, applyTrade, removeTrade, tradesOfHolding,
   holdingPrice, holdingMarketValue, holdingProfit, holdingDayProfit,
   buildOpeningTrade, fxRate, holdingCurrency,
-  goal, saveGoal, watchlist, addWatch, removeWatch,
-} from './state.js?v=20261019f'
+  goal, saveGoal,
+} from './state.js?v=20261019g'
 import {
   MARKET_GROUPS, groupOfMarket, normalizeSymbol, marketOf, lookupSymbol,
   displayCode, CURRENCY_SYMBOL, currencyOf,
-} from './quotes.js?v=20261019f'
+} from './quotes.js?v=20261019g'
 import {
   openSheet, toastOk, toastErr, describeError, confirmDialog, setBusy,
-} from './ui.js?v=20261019f'
+} from './ui.js?v=20261019g'
 import {
   escapeHtml, html, parseAmount, toNumber, todayISO, PALETTE, colorByName,
   safeColor, formatAmount, formatSigned, friendlyDate,
-} from './util.js?v=20261019f'
+} from './util.js?v=20261019g'
 
 /* ============================================================
    各类表单弹层
@@ -1540,163 +1540,6 @@ export function openGoalSheet() {
       }
 
       saveBtn.addEventListener('click', save)
-      foot.querySelector('[data-act="cancel"]').addEventListener('click', () => sheet.close())
-    },
-  })
-}
-
-export function openWatchSheet() {
-  const list = watchlist()
-
-  const rowsHtml = list.length
-    ? list.map((w) => `
-        <div class="watch-manage__row">
-          <span class="watch-manage__main">
-            <span class="watch-manage__name">${escapeHtml(w.name || w.symbol)}</span>
-            <span class="watch-manage__sub">${escapeHtml(displayCode(w.market, w.symbol))} · ${escapeHtml((MARKET_GROUPS.find((g) => g.value === groupOfMarket(w.market)) || {}).label || '')}</span>
-          </span>
-          <button class="mini-btn" type="button" data-act="remove" data-market="${escapeHtml(w.market)}" data-symbol="${escapeHtml(w.symbol)}">移除</button>
-        </div>`).join('')
-    : '<p class="field__hint">还没有自选，下面添加一只</p>'
-
-  const body = html(`
-    <div class="form-grid">
-      <div class="form-row">
-        <label>已添加（${list.length}）</label>
-        <div class="watch-manage" id="watch-list">${rowsHtml}</div>
-      </div>
-
-      <div class="form-row">
-        <label>市场</label>
-        <div class="segmented" id="watch-market" style="flex-wrap:wrap;justify-self:start"></div>
-      </div>
-
-      <div class="form-row">
-        <label>代码</label>
-        <div class="field__row">
-          <input class="input" id="watch-symbol" type="text" autocomplete="off" spellcheck="false" placeholder="600519">
-          <button class="btn btn--ghost" type="button" data-act="lookup">查行情</button>
-        </div>
-        <p class="field__hint" id="watch-hint">填代码后自动带出名称，也可以直接添加</p>
-      </div>
-
-      <p id="watch-error" class="field__error hidden"></p>
-    </div>
-  `)
-
-  const foot = html(`
-    <div style="display:flex;gap:10px;width:100%">
-      <button class="btn btn--ghost" type="button" data-act="cancel">关闭</button>
-      <button class="btn btn--primary" type="button" data-act="add">添加到自选</button>
-    </div>
-  `)
-
-  let group = 'a'
-  let quote = null
-
-  const sheet = openSheet({
-    title: '自选列表',
-    body,
-    footer: foot,
-    onMount: (root) => {
-      const listEl = root.querySelector('#watch-list')
-      const marketEl = root.querySelector('#watch-market')
-      const symbolEl = root.querySelector('#watch-symbol')
-      const hintEl = root.querySelector('#watch-hint')
-      const errEl = root.querySelector('#watch-error')
-      const addBtn = foot.querySelector('[data-act="add"]')
-      const lookupBtn = root.querySelector('[data-act="lookup"]')
-
-      marketEl.innerHTML = MARKET_GROUPS
-        .map((g) => `<button class="segmented__btn${g.value === group ? ' is-active' : ''}" type="button" data-group="${g.value}">${escapeHtml(g.label)}</button>`)
-        .join('')
-
-      marketEl.addEventListener('click', (e) => {
-        const btn = e.target.closest('[data-group]')
-        if (!btn || btn.dataset.group === group) return
-        group = btn.dataset.group
-        quote = null
-        Array.from(marketEl.children).forEach((b) => b.classList.toggle('is-active', b.dataset.group === group))
-        const meta = MARKET_GROUPS.find((g) => g.value === group)
-        symbolEl.placeholder = group === 'us' ? 'AAPL' : group === 'hk' ? '00700' : '600519'
-        hintEl.textContent = meta ? meta.hint : ''
-      })
-
-      root.addEventListener('click', async (e) => {
-        const btn = e.target.closest('[data-act="remove"]')
-        if (!btn) return
-        btn.disabled = true
-        try {
-          await removeWatch(btn.dataset.market, btn.dataset.symbol)
-          sheet.close()
-          toastOk('已移出自选')
-          openWatchSheet()
-        } catch (err) {
-          showError(describeError(err, '移出自选失败'))
-          btn.disabled = false
-        }
-      })
-
-      async function lookup() {
-        const raw = symbolEl.value.trim()
-        if (!raw) {
-          hintEl.textContent = '请先填写代码'
-          return
-        }
-        setBusy(lookupBtn, true, '查询中…')
-        try {
-          quote = await lookupSymbol(group, raw)
-          symbolEl.value = quote.symbol
-          hintEl.textContent = `已获取：${quote.name || quote.symbol}`
-        } catch (err) {
-          quote = null
-          hintEl.textContent = err.message || '没有查到这只标的'
-        } finally {
-          setBusy(lookupBtn, false)
-        }
-      }
-
-      async function add() {
-        const raw = symbolEl.value.trim()
-        if (!raw) {
-          showError('请填写要添加的代码')
-          return
-        }
-        const market = marketOf(group, quote ? quote.symbol : raw)
-        const symbol = quote ? quote.symbol : normalizeSymbol(group, raw)
-        if (!symbol) {
-          showError('代码格式不对')
-          return
-        }
-        setBusy(addBtn, true, '添加中…')
-        try {
-          // 没查过行情就现查一次，把名称一起存下来
-          let name = quote ? quote.name : ''
-          if (!name) {
-            try {
-              const q = await lookupSymbol(group, raw)
-              name = q.name || ''
-            } catch (err) {
-              // 名称取不到不影响添加
-            }
-          }
-          await addWatch({ market, symbol, name })
-          sheet.close()
-          toastOk('已加入自选')
-        } catch (err) {
-          showError(describeError(err, '添加到自选失败'))
-        } finally {
-          setBusy(addBtn, false)
-        }
-      }
-
-      function showError(msg) {
-        errEl.textContent = msg
-        errEl.classList.remove('hidden')
-      }
-
-      lookupBtn.addEventListener('click', lookup)
-      addBtn.addEventListener('click', add)
       foot.querySelector('[data-act="cancel"]').addEventListener('click', () => sheet.close())
     },
   })

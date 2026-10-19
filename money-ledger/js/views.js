@@ -10,24 +10,24 @@ import {
   refreshQuotes, openHoldings, closedHoldings, realizedSummary,
   accountCash, tradesOfHolding, holdingDays, firstTradeDate, isOpenHolding,
   fxRate, holdingCurrency, fxSummary, hasFxMissingHolding, holdingPrice,
-  holdingFxMissing, goalProgress, watchlist, watchQuote, refreshWatchQuotes,
-} from './state.js?v=20261019f'
+  holdingFxMissing, goalProgress,
+} from './state.js?v=20261019g'
 import {
   mountDonut, mountBars, mountArea, mountMultiArea, legendHtml,
   multiLegendHtml, rankingHtml,
-} from './charts.js?v=20261019f'
+} from './charts.js?v=20261019g'
 import {
   openRecordSheet, openAccountSheet, openCategorySheet, removeCategory,
   openHelpSheet, openHoldingSheet, openTradeSheet, openTradesSheet,
-  openGoalSheet, openWatchSheet,
-} from './sheets.js?v=20261019f'
-import { displayCode, marketLabel, CURRENCY_SYMBOL } from './quotes.js?v=20261019f'
-import { allowlistInfo, normalizePhone } from './access.js?v=20261019f'
-import { confirmDialog, toastOk, toastErr, describeError } from './ui.js?v=20261019f'
+  openGoalSheet,
+} from './sheets.js?v=20261019g'
+import { displayCode, marketLabel, CURRENCY_SYMBOL } from './quotes.js?v=20261019g'
+import { allowlistInfo, normalizePhone } from './access.js?v=20261019g'
+import { confirmDialog, toastOk, toastErr, describeError } from './ui.js?v=20261019g'
 import {
   escapeHtml, formatAmount, formatCompact, formatSigned, monthLabel,
   shortMonthLabel, shiftMonth, friendlyDate, toNumber, currentMonthKey, initialsOf,
-} from './util.js?v=20261019f'
+} from './util.js?v=20261019g'
 
 /* ============================================================
    页面渲染
@@ -328,43 +328,6 @@ function goalBlockHtml() {
     </div>`
 }
 
-function watchRowHtml(w) {
-  const q = watchQuote(w.market, w.symbol)
-  const cur = w.market === 'hk' ? 'HKD' : w.market === 'us' ? 'USD' : 'CNY'
-  const sym = CURRENCY_SYMBOL[cur] || '¥'
-  const pct = q ? toNumber(q.changePct) : null
-  const badge = pct === null
-    ? '<span class="badge badge--flat">待更新</span>'
-    : `<span class="badge badge--${pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat'} num">${pct > 0 ? '+' : ''}${pct.toFixed(2)}%</span>`
-  const priceHtml = q
-    ? `<span class="watch-row__price num">${sym}${priceText(q.price)}</span>`
-    : '<span class="watch-row__price num t-muted">--</span>'
-
-  return `
-    <button class="watch-row" type="button" data-act="open-watch">
-      <span class="watch-row__main">
-        <span class="watch-row__name">${escapeHtml(q && q.name ? q.name : (w.name || w.symbol))}</span>
-        <span class="watch-row__sub">${escapeHtml(displayCode(w.market, w.symbol))} · ${escapeHtml(marketLabel(w.market))}</span>
-      </span>
-      <span class="watch-row__right">${priceHtml}${badge}</span>
-    </button>`
-}
-
-function watchBlockHtml() {
-  const list = watchlist()
-  return `
-    <div class="card">
-      <div class="card__head">
-        <div class="card__title">自选列表（${list.length}）</div>
-        <button class="btn btn--sm btn--ghost" type="button" data-act="open-watch">${list.length ? '管理' : '添加'}</button>
-      </div>
-      <div class="card__body${list.length ? ' card__body--flush' : ''}">
-        ${list.length
-          ? `<div class="list">${list.map(watchRowHtml).join('')}</div>`
-          : emptyState('⭐', '自选列表还是空的', '把想盯的股票或基金加进来，不用先建持仓')}
-      </div>
-    </div>`
-}
 
 export function renderDashboard(pageEl) {
   nwLoadToggles()
@@ -465,8 +428,6 @@ export function renderDashboard(pageEl) {
     </div>
 
     ${goalBlockHtml()}
-
-    ${watchBlockHtml()}
 
     <div class="grid grid--3">
       ${statCard('本月支出', { text: `¥${formatAmount(expense)}`, cls: 't-expense' }, `共 ${monthTx.filter((t) => t.type === 'expense').length} 笔`, 'var(--expense)')}
@@ -573,11 +534,7 @@ export function renderDashboard(pageEl) {
     } else if (act === 'go-assets') navigate('assets')
     else if (act === 'go-records') navigate('records')
     else if (act === 'open-goal') openGoalSheet()
-    else if (act === 'open-watch') openWatchSheet()
   }
-
-  // 自选行情：进页面时补一次，函数内部有节流，不会因为重渲染反复请求
-  if (watchlist().length) refreshWatchQuotes()
 }
 
 /* ============================================================

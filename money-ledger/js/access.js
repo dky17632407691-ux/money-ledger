@@ -13,7 +13,7 @@
    名单为空或读取失败时不做限制（fail-open），避免把管理者自己锁在门外。
    ============================================================ */
 
-import * as store from './store.js?v=20261019f'
+import * as store from './store.js?v=20261019g'
 
 const SALT = 'life-ledger-invite-v1:'
 const CACHE_TTL = 5 * 60 * 1000

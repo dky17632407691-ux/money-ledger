@@ -1,21 +1,21 @@
-import { cloud } from './cloud.js?v=20261019f'
-import * as store from './store.js?v=20261019f'
+import { cloud } from './cloud.js?v=20261019g'
+import * as store from './store.js?v=20261019g'
 import {
   state, loadAll, ensureDefaultCategories, setChangeListener, setRenderListener,
   setNavigator, setLogoutHandler, recordTodaySnapshot, activeAccounts,
-  netWorthSummary, refreshQuotes, ensureOpeningTrades, openHoldings,
-} from './state.js?v=20261019f'
-import { PAGES } from './views.js?v=20261019f'
-import { reflowCharts } from './charts.js?v=20261019f'
-import { openRecordSheet } from './sheets.js?v=20261019f'
+  refreshQuotes, ensureOpeningTrades, openHoldings,
+} from './state.js?v=20261019g'
+import { PAGES } from './views.js?v=20261019g'
+import { reflowCharts } from './charts.js?v=20261019g'
+import { openRecordSheet } from './sheets.js?v=20261019g'
 import {
   toastOk, toastErr, describeError, setBusy, skeletonCard,
-} from './ui.js?v=20261019f'
-import { escapeHtml, initialsOf, monthLabel, todayISO, debounce } from './util.js?v=20261019f'
+} from './ui.js?v=20261019g'
+import { escapeHtml, initialsOf, monthLabel, todayISO, debounce } from './util.js?v=20261019g'
 import {
   checkInvite, loadAllowlist, allowlistInfo, phoneOfUser,
   rememberPhone, rememberedPhone,
-} from './access.js?v=20261019f'
+} from './access.js?v=20261019g'
 
 /* ============================================================
    启动流程
@@ -53,9 +53,7 @@ function showApp() {
 
 function subtitleOf(page) {
   if (page === 'dashboard') {
-    const { netWorth } = netWorthSummary()
-    const today = todayISO().replace(/-/g, '/')
-    return `${today} · 净资产 ¥${netWorth.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    return todayISO().replace(/-/g, '/')
   }
   if (page === 'records') return monthLabel(state.month)
   if (page === 'stats') return monthLabel(state.statsMonth)
