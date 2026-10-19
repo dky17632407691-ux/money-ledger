@@ -33,6 +33,46 @@ export function marketLabel(market) {
   return (MARKETS[market] || {}).label || market
 }
 
+/* ---------------- 币种与汇率 ---------------- */
+
+/** 各市场的计价币种：沪/深/场外基金为人民币，港股港币，美股美元 */
+export function currencyOf(market) {
+  if (market === 'hk') return 'HKD'
+  if (market === 'us') return 'USD'
+  return 'CNY'
+}
+
+export const CURRENCY_LABEL = { CNY: '人民币', HKD: '港币', USD: '美元' }
+export const CURRENCY_SYMBOL = { CNY: '¥', HKD: 'HK$', USD: 'US$' }
+
+/** 需要折算的外币（CNY 恒为 1，不请求） */
+const FX_SYMBOLS = { USD: 'whUSDCNY', HKD: 'whHKDCNY' }
+
+/**
+ * 取外币兑人民币汇率。
+ * 与股票行情同一接口、同一套跨域策略，返回 [3] 为 1 外币 = N 人民币。
+ * @returns {Promise<{rates: Record<string, number>, at: string}>}
+ */
+export async function fetchFxRates() {
+  const keys = Object.values(FX_SYMBOLS)
+  const text = await requestQuoteText(QUOTE_ENDPOINT + keys.join(','))
+  const rates = {}
+  let stamp = ''
+  for (const [currency, key] of Object.entries(FX_SYMBOLS)) {
+    const m = text.match(new RegExp(`v_${key}="([^"]*)"`))
+    if (!m) continue
+    const f = m[1].split('~')
+    const rate = toNumber(f[3])
+    if (rate > 0) {
+      rates[currency] = rate
+      if (!stamp && f[5]) stamp = formatQuoteTime(f[5])
+    }
+  }
+  if (!Object.keys(rates).length) throw new Error('汇率服务未返回有效数据')
+  return { rates, at: stamp || formatQuoteTime('') }
+}
+
+
 /** 由行情市场前缀反推表单里的大类 */
 export function groupOfMarket(market) {
   if (market === 'hk') return 'hk'

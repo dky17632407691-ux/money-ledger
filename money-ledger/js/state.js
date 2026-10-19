@@ -1,5 +1,5 @@
 import * as store from './store.js'
-import { fetchQuotes } from './quotes.js'
+import { fetchQuotes, fetchFxRates, currencyOf, CURRENCY_LABEL } from './quotes.js'
 import {
   toNumber, monthKeyOf, currentMonthKey, todayISO, colorByName, safeColor,
 } from './util.js'
@@ -7,6 +7,24 @@ import {
 /* ============================================================
    全局状态与派生计算
    ============================================================ */
+
+const FX_KEY = 'ledger.fx.v1'
+
+/** 汇率缓存：接口挂掉时用上次的值兜底，避免港美股被当成人民币 */
+function loadFxCache() {
+  const empty = { USD: 0, HKD: 0, at: '' }
+  try {
+    const raw = localStorage.getItem(FX_KEY)
+    if (!raw) return empty
+    const obj = JSON.parse(raw) || {}
+    const fx = { USD: 0, HKD: 0, at: typeof obj.at === 'string' ? obj.at : '' }
+    if (Number(obj.USD) > 0) fx.USD = Number(obj.USD)
+    if (Number(obj.HKD) > 0) fx.HKD = Number(obj.HKD)
+    return fx
+  } catch (err) {
+    return empty
+  }
+}
 
 export const state = {
   user: null,
@@ -25,7 +43,78 @@ export const state = {
   chartRange: '3m',                  // 资产走势的时间范围
   showClosed: false,                 // 资产页是否展开清仓记录
   filter: { type: 'all', category: '', accountId: '', keyword: '' },
+
+  // 外币兑人民币汇率（1 外币 = N 人民币），随行情一起刷新并持久化
+  fx: loadFxCache(),
+  fxError: '',
 }
+
+/* ---------------- 汇率 ---------------- */
+
+/** 写入最新汇率并持久化；只更新成功取到的币种，避免一次失败清空缓存 */
+export function setFxRates(rates, at) {
+  if (!rates) return
+  let touched = false
+  for (const currency of ['USD', 'HKD']) {
+    const v = toNumber(rates[currency])
+    if (v > 0 && v !== state.fx[currency]) {
+      state.fx[currency] = v
+      touched = true
+    }
+  }
+  if (at && at !== state.fx.at) {
+    state.fx.at = at
+    touched = true
+  }
+  if (touched) {
+    try {
+      localStorage.setItem(FX_KEY, JSON.stringify(state.fx))
+    } catch (err) {
+      // 隐私模式写入失败可忽略，仅影响下次离线兜底
+    }
+  }
+}
+
+export function setFxError(message) {
+  state.fxError = message || ''
+}
+
+/** 某币种兑人民币汇率；人民币恒为 1；取不到返回 0 */
+export function fxRate(currency) {
+  if (!currency || currency === 'CNY') return 1
+  const r = toNumber(state.fx[currency])
+  return r > 0 ? r : 0
+}
+
+/** 该持仓的计价币种 */
+export function holdingCurrency(h) {
+  return currencyOf(h && h.market)
+}
+
+/** 需要汇率但当前没有 → 界面要提示，不能假装是人民币 */
+export function holdingFxMissing(h) {
+  const cur = holdingCurrency(h)
+  return cur !== 'CNY' && fxRate(cur) <= 0
+}
+
+/** 组合里是否存在汇率缺失的外币持仓 */
+export function hasFxMissingHolding() {
+  return state.holdings.some((h) => isOpenHolding(h) && holdingFxMissing(h))
+}
+
+/** 汇率展示文案，如 “USD 6.6832 · HKD 0.8513” */
+export function fxSummary() {
+  const parts = []
+  const stamp = state.fx.at ? state.fx.at.slice(5, 16) : ''
+  for (const cur of ['USD', 'HKD']) {
+    const r = fxRate(cur)
+    if (r > 0) parts.push(`${cur} ${r.toFixed(4)}`)
+  }
+  if (!parts.length) return ''
+  return parts.join(' · ') + (stamp ? `（${stamp}）` : '')
+}
+
+export { CURRENCY_LABEL }
 
 /* ---------------- 变更通知（视图重建） ---------------- */
 
@@ -263,19 +352,22 @@ export function holdingHasQuote(h) {
   return toNumber(h.last_price) > 0
 }
 
+/** 持仓市值（人民币）。外币按最新汇率折算；汇率缺失时退回原币计入，由界面提示 */
 export function holdingMarketValue(h) {
-  return toNumber(h.shares) * holdingPrice(h)
+  const rate = fxRate(holdingCurrency(h)) || 1
+  return toNumber(h.shares) * holdingPrice(h) * rate
 }
 
-/** 当前持仓的成本总额；优先用精确账目 cost_amount，老数据回退到单价 × 份额 */
+/** 当前持仓的成本总额（人民币）；优先用精确账目 cost_amount，老数据回退到单价 × 份额 */
 export function holdingCost(h) {
+  const rate = fxRate(holdingCurrency(h)) || 1
   if (h.cost_amount !== null && h.cost_amount !== undefined) {
     const amt = toNumber(h.cost_amount)
-    return amt > 0 ? amt : null
+    return amt > 0 ? amt * rate : null
   }
   const c = toNumber(h.cost_price)
   if (c <= 0) return null
-  return toNumber(h.shares) * c
+  return toNumber(h.shares) * c * rate
 }
 
 /** 浮动盈亏：没有成本价时返回 null */
@@ -285,12 +377,21 @@ export function holdingProfit(h) {
   return holdingMarketValue(h) - cost
 }
 
-/** 当日盈亏：需要最新价与昨收都在 */
+/** 当日盈亏（人民币） */
 export function holdingDayProfit(h) {
   const prev = toNumber(h.prev_close)
   const last = toNumber(h.last_price)
   if (prev <= 0 || last <= 0) return null
-  return toNumber(h.shares) * (last - prev)
+  const rate = fxRate(holdingCurrency(h)) || 1
+  return toNumber(h.shares) * (last - prev) * rate
+}
+
+/** 当日盈亏的基准市值（人民币），用于算涨跌幅 */
+export function holdingDayBase(h) {
+  const prev = toNumber(h.prev_close)
+  if (prev <= 0) return 0
+  const rate = fxRate(holdingCurrency(h)) || 1
+  return toNumber(h.shares) * prev * rate
 }
 
 /** 某个投资账户的持仓汇总市值；没有持仓时返回 null */
@@ -324,7 +425,7 @@ export function portfolioSummary() {
     const dp = holdingDayProfit(h)
     if (dp !== null) {
       dayProfit += dp
-      dayBase += toNumber(h.shares) * toNumber(h.prev_close)
+      dayBase += holdingDayBase(h)
       hasDay = true
     }
   }
@@ -397,12 +498,20 @@ export function allTrades() {
  * 建仓（is_opening）代表建账前既有的仓位，不参与现金核算。
  */
 export function accountTradeCash(accountId) {
+  // 交易金额与手续费都是「成交币种」的金额（港股港币、美股美元），
+  // 而账户现金是人民币，所以要先按币种折算，否则买 10 万港币会当成扣 10 万人民币
+  const currencyByHolding = new Map()
+  for (const h of state.holdings) {
+    currencyByHolding.set(String(h.id), holdingCurrency(h))
+  }
   let cash = 0
   for (const t of state.trades) {
     if (String(t.account_id) !== String(accountId)) continue
     if (t.is_opening) continue
-    const amount = toNumber(t.amount)
-    const fee = toNumber(t.fee)
+    const cur = currencyByHolding.get(String(t.holding_id)) || 'CNY'
+    const rate = fxRate(cur) || 1
+    const amount = toNumber(t.amount) * rate
+    const fee = toNumber(t.fee) * rate
     cash += t.side === 'sell' ? amount - fee : -(amount + fee)
   }
   return round2(cash)
@@ -446,8 +555,10 @@ export function realizedSummary() {
   let winCount = 0
   let loseCount = 0
   for (const h of state.holdings) {
-    const r = toNumber(h.realized_profit)
-    if (Math.abs(r) < 0.005) continue
+    const raw = toNumber(h.realized_profit)
+    if (Math.abs(raw) < 0.005) continue
+    // 已实现盈亏记的是成交币种，汇总到人民币口径
+    const r = raw * (fxRate(holdingCurrency(h)) || 1)
     total += r
     if (r > 0) winCount += 1
     else loseCount += 1
@@ -684,6 +795,17 @@ export async function refreshQuotes({ force = false, silent = false } = {}) {
       const { quotes, failed } = await fetchQuotes(
         targets.map((h) => ({ market: h.market, symbol: h.symbol }))
       )
+
+      // 有港美股时同步取汇率；汇率失败不能影响行情本身，单独兜住
+      if (targets.some((h) => holdingCurrency(h) !== 'CNY')) {
+        try {
+          const { rates, at } = await fetchFxRates()
+          setFxRates(rates, at)
+          setFxError('')
+        } catch (err) {
+          setFxError('汇率获取失败，港美股按上次汇率折算')
+        }
+      }
       const byKey = new Map(quotes.map((q) => [`${q.market}${q.symbol}`, q]))
       const nowIso = new Date().toISOString()
       const writes = []

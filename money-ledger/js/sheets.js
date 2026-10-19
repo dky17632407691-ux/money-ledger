@@ -4,11 +4,11 @@ import {
   loadAll, refreshQuotes, requestRender, holdingsOfAccount, accountById,
   accountLabel, accountCash, applyTrade, removeTrade, tradesOfHolding,
   holdingPrice, holdingMarketValue, holdingProfit, holdingDayProfit,
-  buildOpeningTrade,
+  buildOpeningTrade, fxRate, holdingCurrency,
 } from './state.js'
 import {
   MARKET_GROUPS, groupOfMarket, normalizeSymbol, marketOf, lookupSymbol,
-  displayCode,
+  displayCode, CURRENCY_SYMBOL,
 } from './quotes.js'
 import {
   openSheet, toastOk, toastErr, describeError, confirmDialog, setBusy,
@@ -1028,6 +1028,11 @@ export function openTradeSheet(holding, side = 'buy') {
   const heldShares = toNumber(holding.shares)
   const code = displayCode(holding.market, holding.symbol)
   const quoteReady = toNumber(holding.last_price) > 0
+  // 成交价、成交额、手续费都是该市场的计价币种，只有账户现金是人民币
+  const cur = holdingCurrency(holding)
+  const curSym = CURRENCY_SYMBOL[cur] || '¥'
+  const fxNow = fxRate(cur) || 1
+  const toCny = (v) => v * fxNow
 
   const pool = state.accounts.filter(
     (a) => !a.is_archived && String(a.id) !== String(holding.account_id)
@@ -1141,8 +1146,8 @@ export function openTradeSheet(holding, side = 'buy') {
 
       holdingEl.innerHTML = [
         tradeRow('当前持有', `${sharesUnit(heldShares)} 份`),
-        cost > 0 ? tradeRow('持仓成本价', `¥${priceText(cost)}`) : '',
-        quoteReady ? tradeRow('最新价', `¥${priceText(holding.last_price)}`) : '',
+        cost > 0 ? tradeRow('持仓成本价', `${curSym}${priceText(cost)}`) : '',
+        quoteReady ? tradeRow('最新价', `${curSym}${priceText(holding.last_price)}`) : '',
         tradeRow('账户可用资金', `¥${formatAmount(accountCash(account))}`),
       ].filter(Boolean).join('')
 
@@ -1163,24 +1168,31 @@ export function openTradeSheet(holding, side = 'buy') {
         if (Number.isFinite(price) && Number.isFinite(shares) && price > 0 && shares > 0) {
           const amount = roundMoney(shares * price)
           const feeValue = Number.isFinite(fee) ? fee : 0
-          rows.push(tradeRow('成交金额', `¥${formatAmount(amount)}`))
-          if (feeValue > 0) rows.push(tradeRow('手续费', `¥${formatAmount(feeValue)}`))
+          rows.push(tradeRow('成交金额', `${curSym}${formatAmount(amount)}`))
+          if (feeValue > 0) rows.push(tradeRow('手续费', `${curSym}${formatAmount(feeValue)}`))
 
           if (buy) {
             const newShares = heldShares + shares
             const totalCost = heldShares * cost + amount + feeValue
             const newCost = newShares > 0 ? totalCost / newShares : 0
-            rows.push(tradeRow('摊薄后成本价', `¥${priceText(newCost)}`, 't-strong'))
+            rows.push(tradeRow('摊薄后成本价', `${curSym}${priceText(newCost)}`, 't-strong'))
             if (cost > 0) {
               const diff = newCost - cost
-              rows.push(tradeRow('成本变动', `<span class="${diff <= 0 ? 't-down' : 't-up'}">${diff >= 0 ? '+' : '-'}¥${priceText(Math.abs(diff))}</span>`))
+              rows.push(tradeRow('成本变动', `<span class="${diff <= 0 ? 't-down' : 't-up'}">${diff >= 0 ? '+' : '-'}${curSym}${priceText(Math.abs(diff))}</span>`))
             }
             rows.push(tradeRow('买入后份额', `${sharesUnit(newShares)} 份`))
-            rows.push(tradeRow('需要资金', `¥${formatAmount(amount + feeValue)}`))
+            // 人民币账户实际扣的是折后金额，外币成交时一并给出，避免以为扣的是原币数额
+            const needLocal = amount + feeValue
+            rows.push(tradeRow('需要资金', cur === 'CNY'
+              ? `¥${formatAmount(needLocal)}`
+              : `${curSym}${formatAmount(needLocal)}（约 ¥${formatAmount(toCny(needLocal))}）`))
           } else {
             const realized = roundMoney(amount - feeValue - shares * cost)
+            const realizedCny = toCny(realized)
             rows.push(tradeRow('本次盈亏',
-              `<span class="${realized > 0 ? 't-up' : realized < 0 ? 't-down' : 't-muted'}">${formatSigned(realized)}</span>`))
+              `<span class="${realized > 0 ? 't-up' : realized < 0 ? 't-down' : 't-muted'}">${cur === 'CNY'
+                ? formatSigned(realized)
+                : `${formatSigned(realized)}（约 ¥${formatSigned(realizedCny)}）`}</span>`))
             if (cost > 0 && shares * cost > 0) {
               const pct = (realized / (shares * cost)) * 100
               rows.push(tradeRow('本次收益率', `<span class="${pct > 0 ? 't-up' : pct < 0 ? 't-down' : 't-muted'}">${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%</span>`))
@@ -1305,7 +1317,10 @@ export function openTradeSheet(holding, side = 'buy') {
 export function openTradesSheet(holding) {
   const list = tradesOfHolding(holding.id).slice().reverse()
   const code = displayCode(holding.market, holding.symbol)
-  const realized = toNumber(holding.realized_profit)
+  const cur = holdingCurrency(holding)
+  const curSym = CURRENCY_SYMBOL[cur] || '¥'
+  // 已实现盈亏按成交币种记账，展示时折成人民币
+  const realized = toNumber(holding.realized_profit) * (fxRate(cur) || 1)
 
   const body = html(`
     <div class="form-grid">
@@ -1323,12 +1338,12 @@ export function openTradesSheet(holding) {
             `<span class="${realized > 0 ? 't-up' : realized < 0 ? 't-down' : 't-muted'}">${formatSigned(realized)}</span>`)
           : ''}
         ${tradeRow('当前持有', `${sharesUnit(holding.shares)} 份`)}
-        ${toNumber(holding.cost_price) > 0 ? tradeRow('持仓成本价', `¥${priceText(holding.cost_price)}`) : ''}
+        ${toNumber(holding.cost_price) > 0 ? tradeRow('持仓成本价', `${curSym}${priceText(holding.cost_price)}`) : ''}
       </div>
 
       <div class="list list--trades">
         ${list.length
-          ? list.map((t) => tradeRowHtml(t)).join('')
+          ? list.map((t) => tradeRowHtml(t, cur)).join('')
           : `<div class="empty"><div class="empty__icon">📄</div><div class="empty__title">还没有交易记录</div></div>`}
       </div>
       <p class="field__hint">删除某条记录后，持仓份额、成本价与已实现盈亏会自动重算。</p>
@@ -1368,21 +1383,26 @@ export function openTradesSheet(holding) {
   })
 }
 
-function tradeRowHtml(t) {
+function tradeRowHtml(t, currency = 'CNY') {
   const buy = t.side === 'buy'
+  const curSym = CURRENCY_SYMBOL[currency] || '¥'
+  // 成交价与成交额都是成交币种原值，只有已实现盈亏要折成人民币
   const parts = [
-    `¥${priceText(t.price)} × ${sharesUnit(t.shares)}`,
+    `${curSym}${priceText(t.price)} × ${sharesUnit(t.shares)}`,
   ]
-  if (toNumber(t.fee) > 0) parts.push(`费 ¥${formatAmount(t.fee)}`)
+  if (toNumber(t.fee) > 0) parts.push(`费 ${curSym}${formatAmount(t.fee)}`)
   if (t.note) parts.push(t.note)
 
   const right = buy
-    ? `<span class="t-expense num">-¥${formatAmount(t.amount)}</span>`
-    : `<span class="t-income num">+¥${formatAmount(t.amount)}</span>`
+    ? `<span class="t-expense num">-${curSym}${formatAmount(t.amount)}</span>`
+    : `<span class="t-income num">+${curSym}${formatAmount(t.amount)}</span>`
 
-  const realized = t.realized_profit === null || t.realized_profit === undefined
+  const realizedCny = t.realized_profit === null || t.realized_profit === undefined
+    ? null
+    : toNumber(t.realized_profit) * (fxRate(currency) || 1)
+  const realized = realizedCny === null
     ? ''
-    : `<span class="trade-item__realized num ${toNumber(t.realized_profit) > 0 ? 't-up' : toNumber(t.realized_profit) < 0 ? 't-down' : 't-muted'}">${formatSigned(t.realized_profit)}</span>`
+    : `<span class="trade-item__realized num ${realizedCny > 0 ? 't-up' : realizedCny < 0 ? 't-down' : 't-muted'}">${formatSigned(realizedCny)}</span>`
 
   return `
     <div class="trade-item">

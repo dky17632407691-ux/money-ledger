@@ -9,6 +9,8 @@ import {
   holdingDayProfit, holdingHasQuote, portfolioSummary, quoteStatusText,
   refreshQuotes, openHoldings, closedHoldings, realizedSummary,
   accountCash, tradesOfHolding, holdingDays, firstTradeDate, isOpenHolding,
+  fxRate, holdingCurrency, fxSummary, hasFxMissingHolding, holdingPrice,
+  holdingFxMissing,
 } from './state.js'
 import {
   mountDonut, mountBars, mountArea, mountMultiArea, legendHtml,
@@ -18,7 +20,7 @@ import {
   openRecordSheet, openAccountSheet, openCategorySheet, removeCategory,
   openHelpSheet, openHoldingSheet, openTradeSheet, openTradesSheet,
 } from './sheets.js'
-import { displayCode, marketLabel } from './quotes.js'
+import { displayCode, marketLabel, CURRENCY_SYMBOL } from './quotes.js'
 import { allowlistInfo, normalizePhone } from './access.js'
 import { confirmDialog, toastOk, toastErr, describeError } from './ui.js'
 import {
@@ -149,10 +151,16 @@ function holdingRowHtml(h) {
   const pct = toNumber(h.change_pct)
   const account = accountById(h.account_id)
   const code = displayCode(h.market, h.symbol)
+  const cur = holdingCurrency(h)
+  const sym = CURRENCY_SYMBOL[cur] || '¥'
+  const price = holdingPrice(h)
 
+  // 价格与成本是成交币种原值，右侧市值统一为人民币，两者都标清币种避免误读
   const bits = [code, marketLabel(h.market), `${sharesText(h.shares)} 份`]
-  if (cost > 0) bits.push(`成本 ${priceText(cost)}`)
+  if (price > 0) bits.push(`现价 ${sym}${priceText(price)}`)
+  if (cost > 0) bits.push(`成本 ${sym}${priceText(cost)}`)
   if (account) bits.push(account.name)
+  if (holdingFxMissing(h)) bits.push('汇率待更新')
 
   const badge = holdingHasQuote(h)
     ? `<span class="badge badge--${pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat'} num">${pct > 0 ? '+' : ''}${pct.toFixed(2)}%</span>`
@@ -570,6 +578,9 @@ export function renderAssets(pageEl) {
       </div>
     </div>`
 
+  const fxText = fxSummary()
+  const fxMissing = hasFxMissingHolding()
+
   const holdingsCard = holdings.length
     ? `
     <div class="card">
@@ -601,6 +612,9 @@ export function renderAssets(pageEl) {
                <span class="note-strip__sep">·</span>清仓 ${realized.closedCount} 笔
              </div>`
           : ''}
+        ${fxMissing
+          ? '<div class="note-strip">港美股汇率未取到，市值暂按原币计入，请点「刷新行情」重试</div>'
+          : (fxText ? `<div class="note-strip">汇率 ${escapeHtml(fxText)} · 港美股市值已折算为人民币</div>` : '')}
         <div class="divider" style="margin:16px 0 10px"></div>
         <div class="list list--holdings">${holdings.map(holdingRowHtml).join('')}</div>
         <p style="font-size:11.5px;color:var(--text-3);margin:12px 0 0">
@@ -654,6 +668,7 @@ export function renderAssets(pageEl) {
         <div class="segmented" id="range-bar" style="justify-self:start;margin-bottom:14px">${rangeBtns}</div>
         <div class="chart-slot" id="asset-trend"></div>
         <div class="chart-legend">${multiLegendHtml(assetSeries)}</div>
+        ${fxText ? '<p class="field__hint" style="margin-top:10px">港美股按当日汇率折算为人民币计入。该口径自本次更新起生效，之前的快照未折算，曲线在切换日会有一个台阶，不是资产真的跳变。</p>' : ''}
       </div>
     </div>
 
@@ -732,7 +747,9 @@ export function renderAssets(pageEl) {
 
 function closedRowHtml(h) {
   const code = displayCode(h.market, h.symbol)
-  const profit = toNumber(h.realized_profit)
+  // realized_profit 记账币种是成交币种，展示时折成人民币；收益率是比值，不受币种影响
+  const fxR = fxRate(holdingCurrency(h)) || 1
+  const profit = toNumber(h.realized_profit) * fxR
   const list = tradesOfHolding(h.id)
   const buys = list.filter((t) => t.side === 'buy')
   const sells = list.filter((t) => t.side === 'sell')
