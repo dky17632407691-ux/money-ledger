@@ -20,3 +20,6 @@ desktop.ini
 # 本地环境变量
 .env
 .env.local
+
+# 浏览器验证用的临时 profile（体积大，不入库）
+asset-tracker/.chrome-*/

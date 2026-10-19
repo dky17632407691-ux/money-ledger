@@ -11,23 +11,23 @@ import {
   accountCash, tradesOfHolding, holdingDays, firstTradeDate, isOpenHolding,
   fxRate, holdingCurrency, fxSummary, hasFxMissingHolding, holdingPrice,
   holdingFxMissing, goalProgress,
-} from './state.js?v=20261019i'
+} from './state.js?v=202610192325'
 import {
   mountDonut, mountBars, mountArea, mountMultiArea, legendHtml,
   multiLegendHtml, rankingHtml,
-} from './charts.js?v=20261019i'
+} from './charts.js?v=202610192325'
 import {
   openRecordSheet, openAccountSheet, openCategorySheet, removeCategory,
   openHelpSheet, openHoldingSheet, openTradeSheet, openTradesSheet,
   openGoalSheet,
-} from './sheets.js?v=20261019i'
-import { displayCode, marketLabel, CURRENCY_SYMBOL } from './quotes.js?v=20261019i'
-import { allowlistInfo, normalizePhone } from './access.js?v=20261019i'
-import { confirmDialog, toastOk, toastErr, describeError } from './ui.js?v=20261019i'
+} from './sheets.js?v=202610192325'
+import { displayCode, marketLabel, CURRENCY_SYMBOL } from './quotes.js?v=202610192325'
+import { allowlistInfo, normalizePhone } from './access.js?v=202610192325'
+import { confirmDialog, toastOk, toastErr, describeError } from './ui.js?v=202610192325'
 import {
   escapeHtml, formatAmount, formatCompact, formatSigned, monthLabel,
   shortMonthLabel, shiftMonth, friendlyDate, toNumber, currentMonthKey, initialsOf,
-} from './util.js?v=20261019i'
+} from './util.js?v=202610192325'
 
 /* ============================================================
    页面渲染

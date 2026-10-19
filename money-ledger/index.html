@@ -7,7 +7,7 @@
 <meta name="robots" content="noindex, nofollow, noarchive">
 <meta name="description" content="个人日常生活收支记录与金融资产跟踪工具（邀请制，仅受邀账号可登录）" data-page-node-id="nBEcCVth9CTZxzyRJ1UzG0">
 <title>生活记账本 · 收支与资产管理</title>
-<link rel="stylesheet" href="styles.css?v=20261019i" data-page-node-id="tWSEwcKCKjWB3yE5e0iAGO">
+<link rel="stylesheet" href="styles.css?v=202610192325" data-page-node-id="tWSEwcKCKjWB3yE5e0iAGO">
 </head>
 <body data-page-node-id="PG4yz4NseFFerv4Riaf9lA">
 
@@ -128,7 +128,20 @@
 <div id="sheet-root" data-page-node-id="nRlXdetjszGzV6rUqwDpzy"></div>
 <div id="toast-root" class="toast-root" aria-live="polite" data-page-node-id="mknPdPXrWdIyMgrlTxMfX6"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script type="module" src="js/app.js?v=20261019i"></script>
+<script src="js/vendor/workbuddy-cloud-sdk.js?v=202610192325"></script>
+<script>
+/* 启动兜底：若 12 秒后仍停在启动遮罩，说明脚本或云服务卡住了，
+   给出可点击的提示，避免页面看起来一直是一片空白 */
+setTimeout(function () {
+  var boot = document.getElementById('boot')
+  if (!boot || boot.classList.contains('hidden')) return
+  boot.innerHTML = '<div class="boot__logo">账</div>'
+    + '<p class="boot__text">加载超时，可能是网络或云服务暂时不可用</p>'
+    + '<button type="button" onclick="location.reload()" '
+    + 'style="margin-top:14px;padding:10px 22px;border:0;border-radius:999px;'
+    + 'background:#2f6bff;color:#fff;font-size:14px">重新加载</button>'
+}, 12000)
+</script>
+<script type="module" src="js/app.js?v=202610192325"></script>
 </body>
 </html>
