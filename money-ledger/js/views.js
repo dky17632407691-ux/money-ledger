@@ -11,22 +11,22 @@ import {
   accountCash, tradesOfHolding, holdingDays, firstTradeDate, isOpenHolding,
   fxRate, holdingCurrency, fxSummary, hasFxMissingHolding, holdingPrice,
   holdingFxMissing,
-} from './state.js?v=20261019d'
+} from './state.js?v=20261019e'
 import {
   mountDonut, mountBars, mountArea, mountMultiArea, legendHtml,
   multiLegendHtml, rankingHtml,
-} from './charts.js?v=20261019d'
+} from './charts.js?v=20261019e'
 import {
   openRecordSheet, openAccountSheet, openCategorySheet, removeCategory,
   openHelpSheet, openHoldingSheet, openTradeSheet, openTradesSheet,
-} from './sheets.js?v=20261019d'
-import { displayCode, marketLabel, CURRENCY_SYMBOL } from './quotes.js?v=20261019d'
-import { allowlistInfo, normalizePhone } from './access.js?v=20261019d'
-import { confirmDialog, toastOk, toastErr, describeError } from './ui.js?v=20261019d'
+} from './sheets.js?v=20261019e'
+import { displayCode, marketLabel, CURRENCY_SYMBOL } from './quotes.js?v=20261019e'
+import { allowlistInfo, normalizePhone } from './access.js?v=20261019e'
+import { confirmDialog, toastOk, toastErr, describeError } from './ui.js?v=20261019e'
 import {
   escapeHtml, formatAmount, formatCompact, formatSigned, monthLabel,
   shortMonthLabel, shiftMonth, friendlyDate, toNumber, currentMonthKey, initialsOf,
-} from './util.js?v=20261019d'
+} from './util.js?v=20261019e'
 
 /* ============================================================
    页面渲染
@@ -194,27 +194,74 @@ function holdingRowHtml(h) {
    概览
    ============================================================ */
 
+/* 净值卡的「隐藏金额」与「折叠明细」记忆在本机（localStorage），
+   刷新后保持上次的开关状态 */
+const NW_MASK_KEY = 'ledger.nw.mask.v1'
+const NW_EXPAND_KEY = 'ledger.nw.expand.v1'
+let nwMasked = false
+let nwExpanded = true
+
+function nwLoadToggles() {
+  nwMasked = localStorage.getItem(NW_MASK_KEY) === '1'
+  nwExpanded = localStorage.getItem(NW_EXPAND_KEY) !== '0'
+}
+
+function nwSaveToggle(key, on) {
+  localStorage.setItem(key, on ? '1' : '0')
+}
+
+/** 按账户类型归集资产，固定展示顺序，金额为 0 的类型也显示（和参考布局一致） */
+function nwAssetBuckets(balances) {
+  const order = ['investment', 'bank', 'ewallet', 'cash', 'receivable']
+  const labels = { investment: '证券资产', bank: '存款', ewallet: '电子钱包', cash: '现金', receivable: '借出金额' }
+  const buckets = new Map()
+  for (const a of state.accounts) {
+    if (a.is_archived || !a.include_in_networth) continue
+    if (typeMeta(a.type).liability) continue
+    const v = balances.get(String(a.id)) || 0
+    if (!buckets.has(a.type)) {
+      buckets.set(a.type, { label: labels[a.type] || typeMeta(a.type).label, value: 0 })
+    }
+    buckets.get(a.type).value += v
+  }
+  return Array.from(buckets.entries())
+    .sort((x, y) => {
+      const ix = order.indexOf(x[0]); const iy = order.indexOf(y[0])
+      return (ix === -1 ? 99 : ix) - (iy === -1 ? 99 : iy) || y[1].value - x[1].value
+    })
+    .map(([key, b]) => ({ key, ...b }))
+}
+
+/** 负债按「子类型/账户名」归集成行，如 信用卡账单、借款分期 */
+function nwLiabilityBuckets(balances) {
+  const buckets = new Map()
+  for (const a of state.accounts) {
+    if (a.is_archived || !a.include_in_networth) continue
+    if (!typeMeta(a.type).liability) continue
+    const v = balances.get(String(a.id)) || 0
+    const label = subtypeLabel(a.type, a.subtype) || a.name || typeMeta(a.type).label
+    if (!buckets.has(label)) buckets.set(label, { label, value: 0 })
+    buckets.get(label).value += v
+  }
+  return Array.from(buckets.values())
+}
+
+function nwGridHtml(rows) {
+  if (!rows.length) return '<div class="nw-grid nw-grid--empty">暂无账户</div>'
+  return `<div class="nw-grid">${rows.map((r) => `
+    <div class="nw-grid__item">
+      <span>${escapeHtml(r.label)}</span>
+      <b class="num">${nwMasked ? '******' : formatAmount(r.value)}</b>
+    </div>`).join('')}</div>`
+}
+
 export function renderDashboard(pageEl) {
+  nwLoadToggles()
   const { totalAssets, totalLiabilities, netWorth } = netWorthSummary()
   const { income, expense, net } = monthTotals(state.month)
   const series = monthlySeries(6)
   const dist = assetDistribution()
   const monthTx = transactionsOfMonth(state.month)
-
-  const snaps = state.snapshots
-  let pill = ''
-  if (snaps.length >= 2) {
-    const last = toNumber(snaps[snaps.length - 1].net_worth)
-    const prev = toNumber(snaps[snaps.length - 2].net_worth)
-    const diff = last - prev
-    if (Math.abs(diff) >= 0.01) {
-      const up = diff > 0
-      const color = up ? '#ffc9c9' : '#a8f0cf'
-      pill = `<div class="hero__pill">较上次快照 <b style="color:${color}" class="num">${up ? '↑' : '↓'} ¥${formatAmount(Math.abs(diff))}</b></div>`
-    }
-  } else {
-    pill = `<div class="hero__pill">记录两次快照后即可看到资产变化</div>`
-  }
 
   const donutItems = dist.map((d) => ({
     label: d.label,
@@ -253,24 +300,57 @@ export function renderDashboard(pageEl) {
   ]
 
   const pf = portfolioSummary()
-  const pfPill = pf.count > 0
-    ? `<div class="hero__pill">持仓 ${pf.count} 项 · 市值 ¥${formatCompact(pf.marketValue)} · 今日 ${
-      pf.dayProfit === null
-        ? '暂无行情'
-        : `<b style="color:${pf.dayProfit >= 0 ? '#ffc9c9' : '#a8f0cf'}" class="num">${signedMoney(pf.dayProfit)}</b>`
-    }</div>`
-    : ''
+
+  // 今日盈亏：有行情才显示数值，红涨绿跌；隐藏金额时一并打码
+  let dayHtml = '<div class="nw-day__value num t-muted">--</div>'
+  if (pf.dayProfit !== null) {
+    const cls = pf.dayProfit > 0 ? 't-up' : pf.dayProfit < 0 ? 't-down' : 't-muted'
+    const pctText = pf.dayPct !== null ? `（${pf.dayPct >= 0 ? '+' : ''}${(pf.dayPct * 100).toFixed(2)}%）` : ''
+    const arrow = pf.dayProfit >= 0 ? '▲' : '▼'
+    dayHtml = nwMasked
+      ? '<div class="nw-day__value num">******</div>'
+      : `<div class="nw-day__value num ${cls}">${signedMoney(pf.dayProfit)}</div>
+         <div class="nw-day__pct num ${cls}">${pctText}${arrow}</div>`
+  }
+
+  const { balances } = netWorthSummary()
+  const assetRows = nwAssetBuckets(balances)
+  const liabilityRows = nwLiabilityBuckets(balances)
+
+  const eyeIcon = nwMasked
+    ? '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+    : '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
+  const chevronIcon = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${nwExpanded ? '' : 'is-flipped'}"><polyline points="6 15 12 9 18 15"/></svg>`
 
   pageEl.innerHTML = `
-    <div class="hero">
-      <div class="hero__label">净资产（总资产 − 总负债）</div>
-      <div class="hero__value num">¥${formatAmount(netWorth)}</div>
-      <div class="hero__pills">${pill}${pfPill}</div>
-      <div class="hero__meta">
-        <div class="hero__meta-item"><span>总资产</span><strong class="num">¥${formatAmount(totalAssets)}</strong></div>
-        <div class="hero__meta-item"><span>总负债</span><strong class="num">¥${formatAmount(totalLiabilities)}</strong></div>
-        <div class="hero__meta-item"><span>本月结余</span><strong class="num">¥${formatAmount(net)}</strong></div>
+    <div class="nw-card">
+      <div class="nw-card__top">
+        <div class="nw-card__main">
+          <div class="nw-card__label">净资产(¥)
+            <button class="nw-eye${nwMasked ? ' is-off' : ''}" type="button" data-act="nw-mask" aria-label="${nwMasked ? '显示金额' : '隐藏金额'}">${eyeIcon}</button>
+          </div>
+          <div class="nw-card__value num">${nwMasked ? '******' : formatAmount(netWorth)}</div>
+        </div>
+        <div class="nw-day">
+          <div class="nw-day__label">今日盈亏</div>
+          ${dayHtml}
+        </div>
       </div>
+
+      <div class="nw-card__body${nwExpanded ? '' : ' is-collapsed'}">
+        <div class="nw-section">
+          <div class="nw-section__title">资产</div>
+          ${nwGridHtml(assetRows)}
+        </div>
+        ${liabilityRows.length ? `
+        <div class="nw-section">
+          <div class="nw-section__title">负债</div>
+          ${nwGridHtml(liabilityRows)}
+        </div>` : ''}
+      </div>
+
+      ${(assetRows.length || liabilityRows.length) ? `
+      <button class="nw-card__toggle" type="button" data-act="nw-toggle" aria-label="${nwExpanded ? '收起明细' : '展开明细'}">${chevronIcon}</button>` : ''}
     </div>
 
     <div class="grid grid--3">
@@ -367,7 +447,15 @@ export function renderDashboard(pageEl) {
     if (!target) return
     const act = target.dataset.act
     if (act === 'add-tx') openRecordSheet()
-    else if (act === 'go-assets') navigate('assets')
+    else if (act === 'nw-mask') {
+      nwMasked = !nwMasked
+      nwSaveToggle(NW_MASK_KEY, nwMasked)
+      renderDashboard(pageEl)
+    } else if (act === 'nw-toggle') {
+      nwExpanded = !nwExpanded
+      nwSaveToggle(NW_EXPAND_KEY, nwExpanded)
+      renderDashboard(pageEl)
+    } else if (act === 'go-assets') navigate('assets')
     else if (act === 'go-records') navigate('records')
   }
 }

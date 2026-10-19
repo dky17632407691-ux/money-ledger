@@ -921,3 +921,48 @@ ul { margin: 0; padding: 0; list-style: none; }
 @media print {
   .nav, .topbar__right, .fab, .toast-root { display: none !important; }
 }
+
+/* ============================================================
+   概览 · 净资产卡（大数 + 今日盈亏 + 资产/负债两列明细 + 折叠）
+   ============================================================ */
+.nw-card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 16px 16px 6px;
+  box-shadow: var(--shadow-sm);
+}
+.nw-card__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.nw-card__main { min-width: 0; }
+.nw-card__label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); }
+.nw-eye {
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; background: transparent; color: var(--text-3);
+  padding: 2px; cursor: pointer; border-radius: 6px;
+}
+.nw-eye.is-off { color: var(--primary); }
+.nw-card__value {
+  font-size: 31px; font-weight: 700; letter-spacing: -.5px; line-height: 1.25; margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nw-day { text-align: right; flex: 0 0 auto; max-width: 46%; }
+.nw-day__label { font-size: 12.5px; color: var(--text-2); }
+.nw-day__value { font-size: 19px; font-weight: 700; margin-top: 2px; }
+.nw-day__pct { font-size: 12px; margin-top: 1px; }
+.nw-card__body.is-collapsed { display: none; }
+.nw-section { margin-top: 14px; }
+.nw-section__title { font-size: 14px; font-weight: 650; margin-bottom: 8px; }
+.nw-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 20px; }
+.nw-grid__item { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; min-width: 0; }
+.nw-grid__item span { color: var(--text-2); font-size: 13px; flex: 0 0 auto; }
+.nw-grid__item b {
+  font-size: 14.5px; font-weight: 600; min-width: 0; text-align: right;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nw-grid--empty { grid-template-columns: 1fr; color: var(--text-3); font-size: 13px; padding-bottom: 8px; }
+.nw-card__toggle {
+  width: 100%; display: flex; justify-content: center; align-items: center;
+  border: none; background: transparent; color: var(--text-3);
+  padding: 4px 0 6px; cursor: pointer;
+}
+.nw-card__toggle svg { transition: transform .18s ease; }
+.nw-card__toggle svg.is-flipped { transform: rotate(180deg); }

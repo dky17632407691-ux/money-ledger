@@ -1,8 +1,8 @@
-import * as store from './store.js?v=20261019d'
-import { fetchQuotes, fetchFxRates, currencyOf, CURRENCY_LABEL } from './quotes.js?v=20261019d'
+import * as store from './store.js?v=20261019e'
+import { fetchQuotes, fetchFxRates, currencyOf, CURRENCY_LABEL } from './quotes.js?v=20261019e'
 import {
   toNumber, monthKeyOf, currentMonthKey, todayISO, colorByName, safeColor,
-} from './util.js?v=20261019d'
+} from './util.js?v=20261019e'
 
 /* ============================================================
    全局状态与派生计算
