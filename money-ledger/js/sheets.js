@@ -1,22 +1,22 @@
-import * as store from './store.js'
+import * as store from './store.js?v=20261019d'
 import {
   state, categoriesOf, ACCOUNT_TYPES, SUBTYPES, typeMeta, notifyChange,
   loadAll, refreshQuotes, requestRender, holdingsOfAccount, accountById,
   accountLabel, accountCash, applyTrade, removeTrade, tradesOfHolding,
   holdingPrice, holdingMarketValue, holdingProfit, holdingDayProfit,
   buildOpeningTrade, fxRate, holdingCurrency,
-} from './state.js'
+} from './state.js?v=20261019d'
 import {
   MARKET_GROUPS, groupOfMarket, normalizeSymbol, marketOf, lookupSymbol,
-  displayCode, CURRENCY_SYMBOL,
-} from './quotes.js'
+  displayCode, CURRENCY_SYMBOL, currencyOf,
+} from './quotes.js?v=20261019d'
 import {
   openSheet, toastOk, toastErr, describeError, confirmDialog, setBusy,
-} from './ui.js'
+} from './ui.js?v=20261019d'
 import {
   escapeHtml, html, parseAmount, toNumber, todayISO, PALETTE, colorByName,
   safeColor, formatAmount, formatSigned, friendlyDate,
-} from './util.js'
+} from './util.js?v=20261019d'
 
 /* ============================================================
    各类表单弹层
@@ -794,31 +794,59 @@ export function openHoldingSheet(holding = null, presetAccountId = null) {
           : (Number.isFinite(cost) && cost > 0 ? cost : 0)
         const rows = []
 
+        // 与资产页同一口径：港美股先按当日汇率折成人民币再展示，
+        // 汇率没取到就明说，不能把原币金额直接套上 ¥ 当成人民币
+        const cur = currencyOf(draft.group)
+        const sym = CURRENCY_SYMBOL[cur] || '¥'
+        const rate = fxRate(cur)
+        const needFx = cur !== 'CNY'
+        const fxMissing = needFx && rate <= 0
+        const fx = rate > 0 ? rate : 0
+
+        function cnyHtml(native, { signed = false, cls = '', extra = '' } = {}) {
+          if (fxMissing) return '<span class="t-muted">汇率待更新</span>'
+          const value = native * fx
+          const sign = signed ? (value >= 0 ? '+' : '-') : ''
+          const body = `${sign}¥${formatAmount(Math.abs(value))}`
+          const main = cls ? `<span class="${cls}">${body}</span>` : body
+          const nativeText = `${sym}${formatAmount(Math.abs(native))}`
+          // 外币时把原币金额并与涨跌幅一起塞进同一对括号，避免出现两组括号
+          const tail = needFx
+            ? (extra ? `${extra} · ${nativeText}` : nativeText)
+            : extra
+          return tail ? `${main}（${tail}）` : main
+        }
+
         if (q) {
           const pct = toNumber(q.changePct)
           const cls = pct > 0 ? 't-up' : pct < 0 ? 't-down' : 't-muted'
-          rows.push(previewRow('最新价', `${priceText(q.price)} <span class="${cls}">${pct > 0 ? '+' : ''}${pct.toFixed(2)}%</span>`))
+          rows.push(previewRow('最新价', `${sym}${priceText(q.price)} <span class="${cls}">${pct > 0 ? '+' : ''}${pct.toFixed(2)}%</span>`))
         }
 
         if (Number.isFinite(shares) && shares > 0 && price > 0) {
           const mv = shares * price
-          rows.push(previewRow('持仓市值', `¥${formatAmount(mv)}`))
+          rows.push(previewRow('持仓市值', cnyHtml(mv)))
 
           if (Number.isFinite(cost) && cost > 0) {
             const costValue = shares * cost
             const profit = mv - costValue
             const pct = (profit / costValue) * 100
             const cls = profit > 0 ? 't-up' : profit < 0 ? 't-down' : 't-muted'
-            rows.push(previewRow('浮动盈亏',
-              `<span class="${cls}">${profit >= 0 ? '+' : '-'}¥${formatAmount(Math.abs(profit))}（${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%）</span>`))
+            const pctText = fxMissing ? '' : `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`
+            rows.push(previewRow('浮动盈亏', cnyHtml(profit, { signed: true, cls, extra: pctText })))
           }
 
           const dp = q && q.prevClose > 0 ? shares * (q.price - q.prevClose) : null
           if (dp !== null) {
             const cls = dp > 0 ? 't-up' : dp < 0 ? 't-down' : 't-muted'
-            rows.push(previewRow('当日盈亏',
-              `<span class="${cls}">${dp >= 0 ? '+' : '-'}¥${formatAmount(Math.abs(dp))}</span>`))
+            rows.push(previewRow('当日盈亏', cnyHtml(dp, { signed: true, cls })))
           }
+        }
+
+        if (needFx && !fxMissing) {
+          rows.push(previewRow('汇率', `${cur} 1 = ¥${fx.toFixed(4)}`))
+        } else if (fxMissing) {
+          rows.push(previewRow('汇率', '<span class="t-down">未取到，请先刷新行情</span>'))
         }
 
         if (q && q.priceTime) {

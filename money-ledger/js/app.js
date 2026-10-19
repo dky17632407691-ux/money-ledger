@@ -1,21 +1,21 @@
-import { cloud } from './cloud.js'
-import * as store from './store.js'
+import { cloud } from './cloud.js?v=20261019d'
+import * as store from './store.js?v=20261019d'
 import {
   state, loadAll, ensureDefaultCategories, setChangeListener, setRenderListener,
   setNavigator, setLogoutHandler, recordTodaySnapshot, activeAccounts,
   netWorthSummary, refreshQuotes, ensureOpeningTrades, openHoldings,
-} from './state.js'
-import { PAGES } from './views.js'
-import { reflowCharts } from './charts.js'
-import { openRecordSheet } from './sheets.js'
+} from './state.js?v=20261019d'
+import { PAGES } from './views.js?v=20261019d'
+import { reflowCharts } from './charts.js?v=20261019d'
+import { openRecordSheet } from './sheets.js?v=20261019d'
 import {
   toastOk, toastErr, describeError, setBusy, skeletonCard,
-} from './ui.js'
-import { escapeHtml, initialsOf, monthLabel, todayISO, debounce } from './util.js'
+} from './ui.js?v=20261019d'
+import { escapeHtml, initialsOf, monthLabel, todayISO, debounce } from './util.js?v=20261019d'
 import {
   checkInvite, loadAllowlist, allowlistInfo, phoneOfUser,
   rememberPhone, rememberedPhone,
-} from './access.js'
+} from './access.js?v=20261019d'
 
 /* ============================================================
    启动流程

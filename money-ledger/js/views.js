@@ -11,22 +11,22 @@ import {
   accountCash, tradesOfHolding, holdingDays, firstTradeDate, isOpenHolding,
   fxRate, holdingCurrency, fxSummary, hasFxMissingHolding, holdingPrice,
   holdingFxMissing,
-} from './state.js'
+} from './state.js?v=20261019d'
 import {
   mountDonut, mountBars, mountArea, mountMultiArea, legendHtml,
   multiLegendHtml, rankingHtml,
-} from './charts.js'
+} from './charts.js?v=20261019d'
 import {
   openRecordSheet, openAccountSheet, openCategorySheet, removeCategory,
   openHelpSheet, openHoldingSheet, openTradeSheet, openTradesSheet,
-} from './sheets.js'
-import { displayCode, marketLabel, CURRENCY_SYMBOL } from './quotes.js'
-import { allowlistInfo, normalizePhone } from './access.js'
-import { confirmDialog, toastOk, toastErr, describeError } from './ui.js'
+} from './sheets.js?v=20261019d'
+import { displayCode, marketLabel, CURRENCY_SYMBOL } from './quotes.js?v=20261019d'
+import { allowlistInfo, normalizePhone } from './access.js?v=20261019d'
+import { confirmDialog, toastOk, toastErr, describeError } from './ui.js?v=20261019d'
 import {
   escapeHtml, formatAmount, formatCompact, formatSigned, monthLabel,
   shortMonthLabel, shiftMonth, friendlyDate, toNumber, currentMonthKey, initialsOf,
-} from './util.js'
+} from './util.js?v=20261019d'
 
 /* ============================================================
    页面渲染

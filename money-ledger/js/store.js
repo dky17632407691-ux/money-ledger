@@ -1,4 +1,4 @@
-import { cloud } from './cloud.js'
+import { cloud } from './cloud.js?v=20261019d'
 
 /* ============================================================
    数据访问层
