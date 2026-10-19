@@ -144,6 +144,8 @@ ul { margin: 0; padding: 0; list-style: none; }
 
 .input, .select, .textarea {
   width: 100%;
+  /* iOS：聚焦字号 <16px 的输入框会自动放大页面，16px 可避免（记一笔弹层在手机上被撑出屏幕的根因） */
+  font-size: 16px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
