@@ -10,23 +10,24 @@ import {
   refreshQuotes, openHoldings, closedHoldings, realizedSummary,
   accountCash, tradesOfHolding, holdingDays, firstTradeDate, isOpenHolding,
   fxRate, holdingCurrency, fxSummary, hasFxMissingHolding, holdingPrice,
-  holdingFxMissing,
-} from './state.js?v=20261019e'
+  holdingFxMissing, goalProgress, watchlist, watchQuote, refreshWatchQuotes,
+} from './state.js?v=20261019f'
 import {
   mountDonut, mountBars, mountArea, mountMultiArea, legendHtml,
   multiLegendHtml, rankingHtml,
-} from './charts.js?v=20261019e'
+} from './charts.js?v=20261019f'
 import {
   openRecordSheet, openAccountSheet, openCategorySheet, removeCategory,
   openHelpSheet, openHoldingSheet, openTradeSheet, openTradesSheet,
-} from './sheets.js?v=20261019e'
-import { displayCode, marketLabel, CURRENCY_SYMBOL } from './quotes.js?v=20261019e'
-import { allowlistInfo, normalizePhone } from './access.js?v=20261019e'
-import { confirmDialog, toastOk, toastErr, describeError } from './ui.js?v=20261019e'
+  openGoalSheet, openWatchSheet,
+} from './sheets.js?v=20261019f'
+import { displayCode, marketLabel, CURRENCY_SYMBOL } from './quotes.js?v=20261019f'
+import { allowlistInfo, normalizePhone } from './access.js?v=20261019f'
+import { confirmDialog, toastOk, toastErr, describeError } from './ui.js?v=20261019f'
 import {
   escapeHtml, formatAmount, formatCompact, formatSigned, monthLabel,
   shortMonthLabel, shiftMonth, friendlyDate, toNumber, currentMonthKey, initialsOf,
-} from './util.js?v=20261019e'
+} from './util.js?v=20261019f'
 
 /* ============================================================
    页面渲染
@@ -255,6 +256,116 @@ function nwGridHtml(rows) {
     </div>`).join('')}</div>`
 }
 
+/* ---------------- 目标 / 进度 / 自选 ---------------- */
+
+/** 半环进度：外环=金额进度，内环=时间进度，中心显示金额完成度 */
+function goalArcSvg(amountPct, timePct) {
+  const arcPath = (r) => `M${60 - r} 62 A${r} ${r} 0 0 1 ${60 + r} 62`
+  const progress = (pct, r, width, color) => {
+    if (pct === null || pct === undefined) return ''
+    const p = Math.min(1, Math.max(0, pct))
+    return `<path d="${arcPath(r)}" fill="none" stroke="${color}" stroke-width="${width}"
+      stroke-linecap="round" pathLength="100" stroke-dasharray="${(p * 100).toFixed(1)} 100"/>`
+  }
+  const center = amountPct === null ? '--' : `${Math.round(amountPct * 100)}%`
+  return `<svg class="goal-arc" viewBox="0 0 120 74" role="img" aria-label="目标进度 ${center}">
+    <path d="${arcPath(52)}" fill="none" stroke="var(--surface-3)" stroke-width="10" stroke-linecap="round"/>
+    <path d="${arcPath(38)}" fill="none" stroke="var(--surface-3)" stroke-width="8" stroke-linecap="round"/>
+    ${progress(amountPct, 52, 10, 'var(--primary)')}
+    ${progress(timePct, 38, 8, 'var(--warning)')}
+    <text x="60" y="58" text-anchor="middle" class="goal-arc__text">${center}</text>
+  </svg>`
+}
+
+function goalBlockHtml() {
+  const gp = goalProgress()
+  const g = gp.goal
+  const amountText = gp.hasTarget ? `¥${formatAmount(gp.targetAmount)}` : '未设置'
+  const income = toNumber(g.passive_income)
+  const incomeText = income > 0 ? `¥${formatAmount(income)}` : '未设置'
+  const dateText = g.target_date ? escapeHtml(g.target_date) : '未设置'
+  const amountPctText = gp.amountPct === null ? '--' : `${Math.round(gp.amountPct * 100)}%`
+  const timePctText = gp.timePct === null ? '--' : `${Math.round(gp.timePct * 100)}%`
+
+  return `
+    <div class="goal-row">
+      <div class="goal-card">
+        <button class="goal-card__item" type="button" data-act="open-goal">
+          <span class="goal-card__icon" style="background:#eef3ff">🎯</span>
+          <span class="goal-card__text">
+            <span class="goal-card__label">目标金额</span>
+            <span class="goal-card__value num">${amountText}</span>
+          </span>
+        </button>
+        <button class="goal-card__item" type="button" data-act="open-goal">
+          <span class="goal-card__icon" style="background:#fdecec">💰</span>
+          <span class="goal-card__text">
+            <span class="goal-card__label">年被动收入</span>
+            <span class="goal-card__value num">${incomeText}</span>
+          </span>
+        </button>
+        <button class="goal-card__item" type="button" data-act="open-goal">
+          <span class="goal-card__icon" style="background:#e6f7f0">📅</span>
+          <span class="goal-card__text">
+            <span class="goal-card__label">目标时间</span>
+            <span class="goal-card__value num">${dateText}</span>
+          </span>
+        </button>
+      </div>
+
+      <button class="goal-progress" type="button" data-act="open-goal">
+        <span class="goal-progress__head">
+          <span>计划目标进度</span>
+          <span class="goal-progress__gear">⚙</span>
+        </span>
+        ${goalArcSvg(gp.amountPct, gp.timePct)}
+        <span class="goal-progress__legend">
+          <span><i style="background:var(--primary)"></i>金额 ${amountPctText}</span>
+          <span><i style="background:var(--warning)"></i>时间 ${timePctText}</span>
+        </span>
+        <span class="goal-progress__hint">${gp.hasTarget ? '实时追踪进度，及时调整节奏' : '设个目标，这里会显示完成度'}</span>
+      </button>
+    </div>`
+}
+
+function watchRowHtml(w) {
+  const q = watchQuote(w.market, w.symbol)
+  const cur = w.market === 'hk' ? 'HKD' : w.market === 'us' ? 'USD' : 'CNY'
+  const sym = CURRENCY_SYMBOL[cur] || '¥'
+  const pct = q ? toNumber(q.changePct) : null
+  const badge = pct === null
+    ? '<span class="badge badge--flat">待更新</span>'
+    : `<span class="badge badge--${pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat'} num">${pct > 0 ? '+' : ''}${pct.toFixed(2)}%</span>`
+  const priceHtml = q
+    ? `<span class="watch-row__price num">${sym}${priceText(q.price)}</span>`
+    : '<span class="watch-row__price num t-muted">--</span>'
+
+  return `
+    <button class="watch-row" type="button" data-act="open-watch">
+      <span class="watch-row__main">
+        <span class="watch-row__name">${escapeHtml(q && q.name ? q.name : (w.name || w.symbol))}</span>
+        <span class="watch-row__sub">${escapeHtml(displayCode(w.market, w.symbol))} · ${escapeHtml(marketLabel(w.market))}</span>
+      </span>
+      <span class="watch-row__right">${priceHtml}${badge}</span>
+    </button>`
+}
+
+function watchBlockHtml() {
+  const list = watchlist()
+  return `
+    <div class="card">
+      <div class="card__head">
+        <div class="card__title">自选列表（${list.length}）</div>
+        <button class="btn btn--sm btn--ghost" type="button" data-act="open-watch">${list.length ? '管理' : '添加'}</button>
+      </div>
+      <div class="card__body${list.length ? ' card__body--flush' : ''}">
+        ${list.length
+          ? `<div class="list">${list.map(watchRowHtml).join('')}</div>`
+          : emptyState('⭐', '自选列表还是空的', '把想盯的股票或基金加进来，不用先建持仓')}
+      </div>
+    </div>`
+}
+
 export function renderDashboard(pageEl) {
   nwLoadToggles()
   const { totalAssets, totalLiabilities, netWorth } = netWorthSummary()
@@ -352,6 +463,10 @@ export function renderDashboard(pageEl) {
       ${(assetRows.length || liabilityRows.length) ? `
       <button class="nw-card__toggle" type="button" data-act="nw-toggle" aria-label="${nwExpanded ? '收起明细' : '展开明细'}">${chevronIcon}</button>` : ''}
     </div>
+
+    ${goalBlockHtml()}
+
+    ${watchBlockHtml()}
 
     <div class="grid grid--3">
       ${statCard('本月支出', { text: `¥${formatAmount(expense)}`, cls: 't-expense' }, `共 ${monthTx.filter((t) => t.type === 'expense').length} 笔`, 'var(--expense)')}
@@ -457,7 +572,12 @@ export function renderDashboard(pageEl) {
       renderDashboard(pageEl)
     } else if (act === 'go-assets') navigate('assets')
     else if (act === 'go-records') navigate('records')
+    else if (act === 'open-goal') openGoalSheet()
+    else if (act === 'open-watch') openWatchSheet()
   }
+
+  // 自选行情：进页面时补一次，函数内部有节流，不会因为重渲染反复请求
+  if (watchlist().length) refreshWatchQuotes()
 }
 
 /* ============================================================

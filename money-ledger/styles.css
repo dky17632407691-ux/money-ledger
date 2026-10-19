@@ -966,3 +966,62 @@ ul { margin: 0; padding: 0; list-style: none; }
 }
 .nw-card__toggle svg { transition: transform .18s ease; }
 .nw-card__toggle svg.is-flipped { transform: rotate(180deg); }
+
+/* ---------- 目标卡 + 进度环（并排两列） ---------- */
+.goal-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.goal-card {
+  background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-sm);
+  padding: 10px; display: flex; flex-direction: column; gap: 6px; min-width: 0;
+}
+.goal-card__item {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  border: none; background: transparent; padding: 4px 2px;
+  text-align: left; cursor: pointer; border-radius: 10px;
+}
+.goal-card__item:active { background: var(--surface-2); }
+.goal-card__icon {
+  width: 30px; height: 30px; border-radius: 9px; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+}
+.goal-card__text { display: flex; flex-direction: column; min-width: 0; }
+.goal-card__label { font-size: 11.5px; color: var(--text-2); line-height: 1.3; }
+.goal-card__value {
+  font-size: 13.5px; font-weight: 650; line-height: 1.35;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.goal-progress {
+  background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-sm);
+  padding: 10px 10px 8px; border: none; cursor: pointer;
+  display: flex; flex-direction: column; gap: 3px; text-align: left; min-width: 0;
+}
+.goal-progress__head { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; font-weight: 600; }
+.goal-progress__gear { color: var(--text-3); font-size: 12px; }
+.goal-arc { width: 100%; height: auto; display: block; margin-top: 2px; }
+.goal-arc__text { font-size: 15px; font-weight: 700; fill: var(--text); }
+.goal-progress__legend { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; color: var(--text-2); }
+.goal-progress__legend i {
+  display: inline-block; width: 6px; height: 6px; border-radius: 2px;
+  margin-right: 4px; vertical-align: middle;
+}
+.goal-progress__hint { font-size: 10.5px; color: var(--text-3); line-height: 1.4; }
+
+/* ---------- 自选列表 ---------- */
+.watch-row {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 11px 18px; border: none; border-top: 1px solid var(--border);
+  background: transparent; text-align: left; cursor: pointer;
+}
+.watch-row:first-child { border-top: none; }
+.watch-row__main { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.watch-row__name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.watch-row__sub { font-size: 11.5px; color: var(--text-3); }
+.watch-row__right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: 0 0 auto; }
+.watch-row__price { font-size: 14px; font-weight: 600; }
+.watch-manage { display: flex; flex-direction: column; gap: 6px; }
+.watch-manage__row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface-2); border-radius: 10px; padding: 8px 10px;
+}
+.watch-manage__main { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.watch-manage__name { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.watch-manage__sub { font-size: 11.5px; color: var(--text-3); }

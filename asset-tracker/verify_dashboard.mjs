@@ -72,6 +72,18 @@ const script = `(async () => {
   )
 
   const views = await import('/js/views.js' + q)
+
+  // 目标与自选直接塞进 state（跳过云端写入），只为看排版
+  state.settings.goal = { target_amount: 5000000, passive_income: 1855.01, target_date: '2036-10-08', started_on: '2026-10-19' }
+  state.settings.watchlist = [
+    { market: 'us', symbol: 'AAPL', name: '苹果' },
+    { market: 'sz', symbol: '161128', name: '标普信息科技LOF' },
+  ]
+  state.watchQuotes = {
+    'usAAPL': { market: 'us', symbol: 'AAPL', name: '苹果', price: 343.46, changePct: 1.02 },
+    'sz161128': { market: 'sz', symbol: '161128', name: '标普信息科技LOF', price: 7.424, changePct: 0.32 },
+  }
+
   const page = document.createElement('div')
   page.className = 'page'
   page.id = 'probe-page'
@@ -84,6 +96,8 @@ const script = `(async () => {
 
   const card = page.querySelector('.nw-card')
   out.cardText = card?.innerText
+  out.goalText = page.querySelector('.goal-row')?.innerText
+  out.watchText = Array.from(page.querySelectorAll('.card')).find((c) => c.textContent.includes('自选列表'))?.innerText
   out.overflow = []
   page.querySelectorAll('*').forEach((el) => {
     const r = el.getBoundingClientRect()
@@ -109,6 +123,10 @@ if (!value) {
 const out = JSON.parse(value)
 console.log(`=== 概览 · 净资产卡（模块版本 ${out.ver}，${out.innerWidth}px）===`)
 console.log(out.cardText)
+console.log('--- 目标卡片 ---')
+console.log(out.goalText || '(未渲染)')
+console.log('--- 自选列表 ---')
+console.log(out.watchText || '(未渲染)')
 console.log('--- 布局 ---')
 console.log(`docScrollW=${out.docScrollW} innerWidth=${out.innerWidth} overflowCount=${out.overflow.length}`)
 if (out.overflow.length) console.log(out.overflow.slice(0, 8).join('\n'))
@@ -133,6 +151,16 @@ const interact = `(() => {
   out2.expandedBodyShown = getComputedStyle(page.querySelector('.nw-card__body')).display !== 'none'
   out2.maskPersisted = localStorage.getItem('ledger.nw.mask.v1')
   out2.expandPersisted = localStorage.getItem('ledger.nw.expand.v1')
+
+  // 弹层自测：目标表单 / 自选管理
+  page.querySelector('.goal-card__item').click()
+  out2.goalSheetTitle = document.querySelector('.sheet__title')?.textContent
+  out2.goalFields = Array.from(document.querySelectorAll('.sheet .form-row label')).map((l) => l.textContent)
+  document.querySelector('.sheet [data-act="cancel"]')?.click()
+  page.querySelector('[data-act="open-watch"]').click()
+  out2.watchSheetTitle = document.querySelector('.sheet__title')?.textContent
+  out2.watchMarkets = Array.from(document.querySelectorAll('#watch-market .segmented__btn')).map((b) => b.textContent)
+  document.querySelector('.sheet [data-act="cancel"]')?.click()
   return JSON.stringify(out2)
 })()`
 const r2 = await send('Runtime.evaluate', { expression: interact, returnByValue: true })

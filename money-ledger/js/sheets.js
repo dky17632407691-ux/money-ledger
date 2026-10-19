@@ -1,22 +1,23 @@
-import * as store from './store.js?v=20261019e'
+import * as store from './store.js?v=20261019f'
 import {
   state, categoriesOf, ACCOUNT_TYPES, SUBTYPES, typeMeta, notifyChange,
   loadAll, refreshQuotes, requestRender, holdingsOfAccount, accountById,
   accountLabel, accountCash, applyTrade, removeTrade, tradesOfHolding,
   holdingPrice, holdingMarketValue, holdingProfit, holdingDayProfit,
   buildOpeningTrade, fxRate, holdingCurrency,
-} from './state.js?v=20261019e'
+  goal, saveGoal, watchlist, addWatch, removeWatch,
+} from './state.js?v=20261019f'
 import {
   MARKET_GROUPS, groupOfMarket, normalizeSymbol, marketOf, lookupSymbol,
   displayCode, CURRENCY_SYMBOL, currencyOf,
-} from './quotes.js?v=20261019e'
+} from './quotes.js?v=20261019f'
 import {
   openSheet, toastOk, toastErr, describeError, confirmDialog, setBusy,
-} from './ui.js?v=20261019e'
+} from './ui.js?v=20261019f'
 import {
   escapeHtml, html, parseAmount, toNumber, todayISO, PALETTE, colorByName,
   safeColor, formatAmount, formatSigned, friendlyDate,
-} from './util.js?v=20261019e'
+} from './util.js?v=20261019f'
 
 /* ============================================================
    各类表单弹层
@@ -1461,5 +1462,242 @@ export function openHelpSheet() {
         <p style="margin-top:12px"><strong>资产走势</strong><br>每次打开应用或手动点「记录快照」，都会把当天净资产存一条记录（同一天只保留最新一条）。走势图支持近 1 月 / 3 月 / 半年 / 1 年 / 全部切换，同时对比总资产、总负债与净资产三条线，概览页也有简版走势。</p>
         <p style="margin-top:12px"><strong>数据安全</strong><br>所有数据保存在云端，与你的账号绑定。每条记录在数据库层面都带权限校验，其他账号无法读取或修改。</p>
       </div>`,
+  })
+}
+
+/* ============================================================
+   财务目标 / 自选列表
+   ============================================================ */
+
+export function openGoalSheet() {
+  const g = goal()
+  const body = html(`
+    <div class="form-grid">
+      <div class="form-row">
+        <label>目标金额</label>
+        <input class="input" id="goal-amount" type="text" inputmode="decimal" autocomplete="off"
+               placeholder="如 5000000" value="${toNumber(g.target_amount) > 0 ? escapeHtml(String(toNumber(g.target_amount))) : ''}">
+        <p class="field__hint">用当前净资产除以这个数，就是金额完成度</p>
+      </div>
+      <div class="form-row">
+        <label>年被动收入（选填）</label>
+        <input class="input" id="goal-income" type="text" inputmode="decimal" autocomplete="off"
+               placeholder="如 60000" value="${toNumber(g.passive_income) > 0 ? escapeHtml(String(toNumber(g.passive_income))) : ''}">
+        <p class="field__hint">只是想记下来的一个数，暂不参与计算</p>
+      </div>
+      <div class="form-row">
+        <label>目标时间</label>
+        <input class="input" id="goal-date" type="date" value="${escapeHtml(g.target_date || '')}">
+        <p class="field__hint">从第一次设定那天算起，用来看时间进度</p>
+      </div>
+      <p id="goal-error" class="field__error hidden"></p>
+    </div>
+  `)
+
+  const foot = html(`
+    <div style="display:flex;gap:10px;width:100%">
+      <button class="btn btn--ghost" type="button" data-act="cancel">取消</button>
+      <button class="btn btn--primary" type="button" data-act="save">保存</button>
+    </div>
+  `)
+
+  const sheet = openSheet({
+    title: '财务目标',
+    body,
+    footer: foot,
+    onMount: (root) => {
+      const amountEl = root.querySelector('#goal-amount')
+      const incomeEl = root.querySelector('#goal-income')
+      const dateEl = root.querySelector('#goal-date')
+      const errEl = root.querySelector('#goal-error')
+      const saveBtn = foot.querySelector('[data-act="save"]')
+
+      async function save() {
+        const amount = parseAmount(amountEl.value)
+        const income = parseAmount(incomeEl.value)
+        if (Number.isFinite(amount) && amount < 0) return showError('目标金额不能是负数')
+        if (Number.isFinite(income) && income < 0) return showError('年被动收入不能是负数')
+
+        setBusy(saveBtn, true, '保存中…')
+        try {
+          await saveGoal({
+            target_amount: Number.isFinite(amount) ? amount : 0,
+            passive_income: Number.isFinite(income) ? income : 0,
+            target_date: dateEl.value || '',
+          })
+          sheet.close()
+          toastOk('目标已保存')
+        } catch (err) {
+          showError(describeError(err, '保存目标失败'))
+        } finally {
+          setBusy(saveBtn, false)
+        }
+      }
+
+      function showError(msg) {
+        errEl.textContent = msg
+        errEl.classList.remove('hidden')
+      }
+
+      saveBtn.addEventListener('click', save)
+      foot.querySelector('[data-act="cancel"]').addEventListener('click', () => sheet.close())
+    },
+  })
+}
+
+export function openWatchSheet() {
+  const list = watchlist()
+
+  const rowsHtml = list.length
+    ? list.map((w) => `
+        <div class="watch-manage__row">
+          <span class="watch-manage__main">
+            <span class="watch-manage__name">${escapeHtml(w.name || w.symbol)}</span>
+            <span class="watch-manage__sub">${escapeHtml(displayCode(w.market, w.symbol))} · ${escapeHtml((MARKET_GROUPS.find((g) => g.value === groupOfMarket(w.market)) || {}).label || '')}</span>
+          </span>
+          <button class="mini-btn" type="button" data-act="remove" data-market="${escapeHtml(w.market)}" data-symbol="${escapeHtml(w.symbol)}">移除</button>
+        </div>`).join('')
+    : '<p class="field__hint">还没有自选，下面添加一只</p>'
+
+  const body = html(`
+    <div class="form-grid">
+      <div class="form-row">
+        <label>已添加（${list.length}）</label>
+        <div class="watch-manage" id="watch-list">${rowsHtml}</div>
+      </div>
+
+      <div class="form-row">
+        <label>市场</label>
+        <div class="segmented" id="watch-market" style="flex-wrap:wrap;justify-self:start"></div>
+      </div>
+
+      <div class="form-row">
+        <label>代码</label>
+        <div class="field__row">
+          <input class="input" id="watch-symbol" type="text" autocomplete="off" spellcheck="false" placeholder="600519">
+          <button class="btn btn--ghost" type="button" data-act="lookup">查行情</button>
+        </div>
+        <p class="field__hint" id="watch-hint">填代码后自动带出名称，也可以直接添加</p>
+      </div>
+
+      <p id="watch-error" class="field__error hidden"></p>
+    </div>
+  `)
+
+  const foot = html(`
+    <div style="display:flex;gap:10px;width:100%">
+      <button class="btn btn--ghost" type="button" data-act="cancel">关闭</button>
+      <button class="btn btn--primary" type="button" data-act="add">添加到自选</button>
+    </div>
+  `)
+
+  let group = 'a'
+  let quote = null
+
+  const sheet = openSheet({
+    title: '自选列表',
+    body,
+    footer: foot,
+    onMount: (root) => {
+      const listEl = root.querySelector('#watch-list')
+      const marketEl = root.querySelector('#watch-market')
+      const symbolEl = root.querySelector('#watch-symbol')
+      const hintEl = root.querySelector('#watch-hint')
+      const errEl = root.querySelector('#watch-error')
+      const addBtn = foot.querySelector('[data-act="add"]')
+      const lookupBtn = root.querySelector('[data-act="lookup"]')
+
+      marketEl.innerHTML = MARKET_GROUPS
+        .map((g) => `<button class="segmented__btn${g.value === group ? ' is-active' : ''}" type="button" data-group="${g.value}">${escapeHtml(g.label)}</button>`)
+        .join('')
+
+      marketEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-group]')
+        if (!btn || btn.dataset.group === group) return
+        group = btn.dataset.group
+        quote = null
+        Array.from(marketEl.children).forEach((b) => b.classList.toggle('is-active', b.dataset.group === group))
+        const meta = MARKET_GROUPS.find((g) => g.value === group)
+        symbolEl.placeholder = group === 'us' ? 'AAPL' : group === 'hk' ? '00700' : '600519'
+        hintEl.textContent = meta ? meta.hint : ''
+      })
+
+      root.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-act="remove"]')
+        if (!btn) return
+        btn.disabled = true
+        try {
+          await removeWatch(btn.dataset.market, btn.dataset.symbol)
+          sheet.close()
+          toastOk('已移出自选')
+          openWatchSheet()
+        } catch (err) {
+          showError(describeError(err, '移出自选失败'))
+          btn.disabled = false
+        }
+      })
+
+      async function lookup() {
+        const raw = symbolEl.value.trim()
+        if (!raw) {
+          hintEl.textContent = '请先填写代码'
+          return
+        }
+        setBusy(lookupBtn, true, '查询中…')
+        try {
+          quote = await lookupSymbol(group, raw)
+          symbolEl.value = quote.symbol
+          hintEl.textContent = `已获取：${quote.name || quote.symbol}`
+        } catch (err) {
+          quote = null
+          hintEl.textContent = err.message || '没有查到这只标的'
+        } finally {
+          setBusy(lookupBtn, false)
+        }
+      }
+
+      async function add() {
+        const raw = symbolEl.value.trim()
+        if (!raw) {
+          showError('请填写要添加的代码')
+          return
+        }
+        const market = marketOf(group, quote ? quote.symbol : raw)
+        const symbol = quote ? quote.symbol : normalizeSymbol(group, raw)
+        if (!symbol) {
+          showError('代码格式不对')
+          return
+        }
+        setBusy(addBtn, true, '添加中…')
+        try {
+          // 没查过行情就现查一次，把名称一起存下来
+          let name = quote ? quote.name : ''
+          if (!name) {
+            try {
+              const q = await lookupSymbol(group, raw)
+              name = q.name || ''
+            } catch (err) {
+              // 名称取不到不影响添加
+            }
+          }
+          await addWatch({ market, symbol, name })
+          sheet.close()
+          toastOk('已加入自选')
+        } catch (err) {
+          showError(describeError(err, '添加到自选失败'))
+        } finally {
+          setBusy(addBtn, false)
+        }
+      }
+
+      function showError(msg) {
+        errEl.textContent = msg
+        errEl.classList.remove('hidden')
+      }
+
+      lookupBtn.addEventListener('click', lookup)
+      addBtn.addEventListener('click', add)
+      foot.querySelector('[data-act="cancel"]').addEventListener('click', () => sheet.close())
+    },
   })
 }

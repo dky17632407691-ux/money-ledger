@@ -1,8 +1,8 @@
-import * as store from './store.js?v=20261019e'
-import { fetchQuotes, fetchFxRates, currencyOf, CURRENCY_LABEL } from './quotes.js?v=20261019e'
+import * as store from './store.js?v=20261019f'
+import { fetchQuotes, fetchFxRates, currencyOf, CURRENCY_LABEL } from './quotes.js?v=20261019f'
 import {
   toNumber, monthKeyOf, currentMonthKey, todayISO, colorByName, safeColor,
-} from './util.js?v=20261019e'
+} from './util.js?v=20261019f'
 
 /* ============================================================
    全局状态与派生计算
@@ -47,6 +47,11 @@ export const state = {
   // 外币兑人民币汇率（1 外币 = N 人民币），随行情一起刷新并持久化
   fx: loadFxCache(),
   fxError: '',
+
+  // user_settings 表里的轻量配置：goal = 财务目标，watchlist = 自选列表
+  settings: { goal: null, watchlist: [] },
+  watchQuotes: {},                  // 自选标的的最新行情，key 为 `${market}${symbol}`
+  watchStatus: { loading: false, error: '' },
 }
 
 /* ---------------- 汇率 ---------------- */
@@ -266,15 +271,33 @@ export async function loadAll() {
     store.listHoldings(),
     store.listHoldingTrades(),
   ])
+  // 设置读取失败只影响目标/自选，不能拖垮整个账本加载
+  let settings = []
+  try {
+    settings = await store.listSettings()
+  } catch (err) {
+    console.warn('user_settings 读取失败，目标与自选暂不可用', err)
+  }
   state.accounts = accounts
   state.categories = categories
   state.transactions = transactions
   state.snapshots = snapshots
   state.holdings = holdings
   state.trades = trades
+  applySettings(settings)
   state.loading = false
   state.loaded = true
   return state
+}
+
+/** 把 user_settings 的行铺成 state.settings 里的结构 */
+function applySettings(rows) {
+  const next = { goal: null, watchlist: [] }
+  for (const row of rows || []) {
+    if (row.key === 'goal' && row.value && typeof row.value === 'object') next.goal = row.value
+    if (row.key === 'watchlist' && Array.isArray(row.value)) next.watchlist = row.value
+  }
+  state.settings = next
 }
 
 /** 首次登录（空账本）的用户自动写入默认分类 */
@@ -1080,4 +1103,110 @@ export async function recordTodaySnapshot(note = null) {
   else state.snapshots.push(saved)
   state.snapshots.sort((a, b) => (a.snapshot_date < b.snapshot_date ? -1 : 1))
   return saved
+}
+
+/* ============================================================
+   财务目标与自选列表（存在 user_settings 表）
+   ============================================================ */
+
+const EMPTY_GOAL = { target_amount: 0, passive_income: 0, target_date: '', started_on: '' }
+
+export function goal() {
+  return { ...EMPTY_GOAL, ...(state.settings.goal || {}) }
+}
+
+export async function saveGoal(patch) {
+  const next = { ...goal(), ...patch }
+  if (!next.started_on) next.started_on = todayISO()
+  await store.saveSetting('goal', next)
+  state.settings.goal = next
+  notifyChange()
+  return next
+}
+
+/**
+ * 目标进度。
+ * 金额进度 = 当前净资产 / 目标金额；时间进度 = 从设定日到目标日已过的比例。
+ * 没有目标金额时两者都为 null，页面显示引导而不是 0%。
+ */
+export function goalProgress() {
+  const g = goal()
+  const target = toNumber(g.target_amount)
+  const { netWorth } = netWorthSummary()
+  const amountPct = target > 0 ? Math.max(0, netWorth) / target : null
+
+  let timePct = null
+  if (g.started_on && g.target_date) {
+    const start = new Date(`${g.started_on}T00:00:00`).getTime()
+    const end = new Date(`${g.target_date}T00:00:00`).getTime()
+    if (end > start) timePct = Math.min(1, Math.max(0, (Date.now() - start) / (end - start)))
+  }
+
+  return { goal: g, hasTarget: target > 0, targetAmount: target, amountPct, timePct }
+}
+
+/* ---------------- 自选列表 ---------------- */
+
+export function watchlist() {
+  return Array.isArray(state.settings.watchlist) ? state.settings.watchlist : []
+}
+
+export function watchQuote(market, symbol) {
+  return state.watchQuotes[`${market}${symbol}`] || null
+}
+
+async function persistWatchlist(next) {
+  await store.saveSetting('watchlist', next)
+  state.settings.watchlist = next
+  notifyChange()
+}
+
+export async function addWatch(item) {
+  const list = watchlist()
+  if (list.some((w) => w.market === item.market && w.symbol === item.symbol)) {
+    throw new Error('这只已经在自选里了')
+  }
+  await persistWatchlist([
+    ...list,
+    { market: item.market, symbol: item.symbol, name: item.name || '', added_on: todayISO() },
+  ])
+}
+
+export async function removeWatch(market, symbol) {
+  await persistWatchlist(watchlist().filter((w) => !(w.market === market && w.symbol === symbol)))
+  delete state.watchQuotes[`${market}${symbol}`]
+}
+
+let watchInFlight = null
+let lastWatchAt = 0
+const WATCH_THROTTLE_MS = 60 * 1000
+
+/** 拉自选标的行情；失败不阻塞页面，行上显示「待更新」 */
+export async function refreshWatchQuotes({ force = false } = {}) {
+  const list = watchlist()
+  if (!list.length) return { updated: 0 }
+  if (watchInFlight) return watchInFlight
+  // 渲染完会再调用一次，必须节流，否则 fetch → render → fetch 无限循环
+  if (!force && Date.now() - lastWatchAt < WATCH_THROTTLE_MS) return { skipped: true, updated: 0 }
+
+  watchInFlight = (async () => {
+    state.watchStatus.loading = true
+    state.watchStatus.error = ''
+    try {
+      const { quotes } = await fetchQuotes(list.map((w) => ({ market: w.market, symbol: w.symbol })))
+      const map = {}
+      for (const q of quotes) map[`${q.market}${q.symbol}`] = q
+      state.watchQuotes = map
+      return { updated: quotes.length }
+    } catch (err) {
+      state.watchStatus.error = err.message || '自选行情获取失败'
+      return { updated: 0 }
+    } finally {
+      state.watchStatus.loading = false
+      watchInFlight = null
+      lastWatchAt = Date.now()
+      requestRender()
+    }
+  })()
+  return watchInFlight
 }

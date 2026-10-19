@@ -1,4 +1,4 @@
-import { cloud } from './cloud.js?v=20261019e'
+import { cloud } from './cloud.js?v=20261019f'
 
 /* ============================================================
    数据访问层
@@ -283,4 +283,34 @@ export function deleteSnapshot(id) {
     .select()
     .then(unwrap)
     .then((rows) => assertAffected(rows, '该快照不存在或已被删除'))
+}
+
+/* ---------------- 用户设置（财务目标 / 自选列表等轻量配置） ---------------- */
+/* 都存在 user_settings 表里，一个 key 一行，value 是 jsonb。
+   以后再加类似「一个小功能配一点数据」的需求，不用再建表。 */
+
+export function listSettings() {
+  return selectAll('user_settings', '*', (q) => q.order('key', { ascending: true }))
+}
+
+/** 按 key 覆盖写入：有则更新、无则新建 */
+export async function saveSetting(key, value) {
+  const existing = unwrap(
+    await cloud.database.from('user_settings').select('*').eq('key', key).maybeSingle(),
+  )
+  if (existing) {
+    return cloud.database
+      .from('user_settings')
+      .update({ value, updated_at: new Date().toISOString() })
+      .eq('id', existing.id)
+      .select()
+      .then(unwrap)
+      .then((rows) => assertAffected(rows)[0])
+  }
+  return cloud.database
+    .from('user_settings')
+    .insert({ key, value, owner_name: ownerNameOf() })
+    .select()
+    .then(unwrap)
+    .then((rows) => rows[0])
 }
