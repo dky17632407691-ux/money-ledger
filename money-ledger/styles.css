@@ -554,7 +554,9 @@ ul { margin: 0; padding: 0; list-style: none; }
 .chip__emoji { font-size: 14px; }
 
 /* ---------------- 表单 ---------------- */
-.form-grid { display: grid; gap: 14px; }
+/* minmax(0,1fr) 必须显式声明：默认 auto 列取子项最大内容宽度，
+   金额框（34px 字号 × 默认 20 字符）会把整列撑到 473px，手机上右侧被切 */
+.form-grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
 .form-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .form-row { display: flex; flex-direction: column; gap: 7px; }
 .form-row > label { font-size: 12.5px; color: var(--text-2); font-weight: 500; }
