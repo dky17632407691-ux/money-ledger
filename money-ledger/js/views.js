@@ -11,23 +11,23 @@ import {
   accountCash, tradesOfHolding, holdingDays, firstTradeDate, isOpenHolding,
   fxRate, holdingCurrency, fxSummary, hasFxMissingHolding, holdingPrice,
   holdingFxMissing, goalProgress,
-} from './state.js?v=20261019g'
+} from './state.js?v=20261019h'
 import {
   mountDonut, mountBars, mountArea, mountMultiArea, legendHtml,
   multiLegendHtml, rankingHtml,
-} from './charts.js?v=20261019g'
+} from './charts.js?v=20261019h'
 import {
   openRecordSheet, openAccountSheet, openCategorySheet, removeCategory,
   openHelpSheet, openHoldingSheet, openTradeSheet, openTradesSheet,
   openGoalSheet,
-} from './sheets.js?v=20261019g'
-import { displayCode, marketLabel, CURRENCY_SYMBOL } from './quotes.js?v=20261019g'
-import { allowlistInfo, normalizePhone } from './access.js?v=20261019g'
-import { confirmDialog, toastOk, toastErr, describeError } from './ui.js?v=20261019g'
+} from './sheets.js?v=20261019h'
+import { displayCode, marketLabel, CURRENCY_SYMBOL } from './quotes.js?v=20261019h'
+import { allowlistInfo, normalizePhone } from './access.js?v=20261019h'
+import { confirmDialog, toastOk, toastErr, describeError } from './ui.js?v=20261019h'
 import {
   escapeHtml, formatAmount, formatCompact, formatSigned, monthLabel,
   shortMonthLabel, shiftMonth, friendlyDate, toNumber, currentMonthKey, initialsOf,
-} from './util.js?v=20261019g'
+} from './util.js?v=20261019h'
 
 /* ============================================================
    页面渲染
@@ -287,6 +287,12 @@ function goalBlockHtml() {
   const amountPctText = gp.amountPct === null ? '--' : `${Math.round(gp.amountPct * 100)}%`
   const timePctText = gp.timePct === null ? '--' : `${Math.round(gp.timePct * 100)}%`
 
+  // 距离目标 = 目标金额 − 总资产；达成了就直接说达成
+  let distanceText = '未设置'
+  if (gp.distance !== null) {
+    distanceText = gp.distance > 0 ? `¥${formatAmount(gp.distance)}` : '已达成 🎉'
+  }
+
   return `
     <div class="goal-row">
       <div class="goal-card">
@@ -295,6 +301,13 @@ function goalBlockHtml() {
           <span class="goal-card__text">
             <span class="goal-card__label">目标金额</span>
             <span class="goal-card__value num">${amountText}</span>
+          </span>
+        </button>
+        <button class="goal-card__item" type="button" data-act="open-goal">
+          <span class="goal-card__icon" style="background:#fff4e5">🚩</span>
+          <span class="goal-card__text">
+            <span class="goal-card__label">距离目标</span>
+            <span class="goal-card__value num">${distanceText}</span>
           </span>
         </button>
         <button class="goal-card__item" type="button" data-act="open-goal">

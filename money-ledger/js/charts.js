@@ -1,4 +1,4 @@
-import { escapeHtml, formatAmount, formatCompact } from './util.js?v=20261019g'
+import { escapeHtml, formatAmount, formatCompact } from './util.js?v=20261019h'
 
 /* ============================================================
    图表：按容器实际宽度绘制，文本框不缩放

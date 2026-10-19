@@ -1,4 +1,4 @@
-import { PUBLIC_CONFIG } from './config.js?v=20261019g'
+import { PUBLIC_CONFIG } from './config.js?v=20261019h'
 
 /**
  * 云服务客户端：全应用只初始化一次，Auth / Database / Storage / LLM 共用同一实例。

@@ -1,8 +1,8 @@
-import * as store from './store.js?v=20261019g'
-import { fetchQuotes, fetchFxRates, currencyOf, CURRENCY_LABEL } from './quotes.js?v=20261019g'
+import * as store from './store.js?v=20261019h'
+import { fetchQuotes, fetchFxRates, currencyOf, CURRENCY_LABEL } from './quotes.js?v=20261019h'
 import {
   toNumber, monthKeyOf, currentMonthKey, todayISO, colorByName, safeColor,
-} from './util.js?v=20261019g'
+} from './util.js?v=20261019h'
 
 /* ============================================================
    全局状态与派生计算
@@ -1129,8 +1129,10 @@ export async function saveGoal(patch) {
 export function goalProgress() {
   const g = goal()
   const target = toNumber(g.target_amount)
-  const { netWorth } = netWorthSummary()
+  const { netWorth, totalAssets } = netWorthSummary()
   const amountPct = target > 0 ? Math.max(0, netWorth) / target : null
+  // 距离目标按用户口径算：目标金额 − 总资产（不是净资产）
+  const distance = target > 0 ? target - totalAssets : null
 
   let timePct = null
   if (g.started_on && g.target_date) {
@@ -1139,5 +1141,5 @@ export function goalProgress() {
     if (end > start) timePct = Math.min(1, Math.max(0, (Date.now() - start) / (end - start)))
   }
 
-  return { goal: g, hasTarget: target > 0, targetAmount: target, amountPct, timePct }
+  return { goal: g, hasTarget: target > 0, targetAmount: target, totalAssets, distance, amountPct, timePct }
 }
