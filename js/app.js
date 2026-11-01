@@ -17,8 +17,14 @@ import {
 } from './quotes.js'
 import { toast, confirmDialog, openSheet, setBoot, hideBoot } from './ui.js'
 import { exportJson, importJson, resetDb, STORAGE_KEY } from './store.js'
+import {
+  bootSync, getSyncSnapshot, isLoggedIn, login, logout, startSync, syncNow,
+} from './sync.js'
 
-const BUILD = '202611011200'
+const BUILD = '202611011430'
+const TOKEN_HELP_URL = 'https://github.com/settings/tokens/new?scopes=gist&description=money-ledger-cloud'
+
+let uiReady = false
 
 function moneyClass(n) {
   if (n > 0) return 'pos'
@@ -38,6 +44,23 @@ function render() {
   else page.innerHTML = renderMe()
   bindPage(page)
   syncNav()
+}
+
+function paintSyncStatus() {
+  const snap = getSyncSnapshot()
+  document.querySelectorAll('[data-sync-pill]').forEach((el) => {
+    el.textContent = snap.label
+    el.className = `sync-pill sync-pill--${snap.status}`
+  })
+  document.querySelectorAll('[data-sync-detail]').forEach((el) => {
+    el.textContent = snap.detail
+    el.classList.toggle('neg', snap.status === 'error')
+  })
+}
+
+function syncPill() {
+  const snap = getSyncSnapshot()
+  return `<span data-sync-pill class="sync-pill sync-pill--${snap.status}">${escapeHtml(snap.label)}</span>`
 }
 
 function syncNav() {
@@ -68,7 +91,7 @@ function renderOverview() {
   return `
   <header class="page-head">
     <div>
-      <div class="eyebrow">本地账本 · v${BUILD}</div>
+      <div class="eyebrow">v${BUILD} · ${syncPill()}</div>
       <h1>概览</h1>
     </div>
     <button type="button" class="btn btn--ghost btn--sm" id="btn-refresh">刷新行情</button>
@@ -135,7 +158,7 @@ function renderDaily() {
   return `
   <header class="page-head">
     <div>
-      <div class="eyebrow">日常收支</div>
+      <div class="eyebrow">日常收支 · ${syncPill()}</div>
       <h1>
         <button type="button" class="icon-btn" data-shift-month="-1">‹</button>
         ${monthLabel(state.monthKey)}
@@ -189,7 +212,7 @@ function renderAssets() {
   return `
   <header class="page-head">
     <div>
-      <div class="eyebrow">持仓资产</div>
+      <div class="eyebrow">持仓资产 · ${syncPill()}</div>
       <h1>资产</h1>
     </div>
     <div class="row-actions">
@@ -220,7 +243,7 @@ function renderStats() {
   }).join('')
   const ms = monthTxSummary()
   return `
-  <header class="page-head"><div><div class="eyebrow">统计</div>
+  <header class="page-head"><div><div class="eyebrow">统计 · ${syncPill()}</div>
     <h1>
       <button type="button" class="icon-btn" data-shift-month="-1">‹</button>
       ${monthLabel(state.monthKey)}
@@ -236,6 +259,36 @@ function renderStats() {
   </section>`
 }
 
+function renderSyncCard() {
+  const snap = getSyncSnapshot()
+  const head = `
+    <div class="block__head"><h2>云同步</h2>${syncPill()}</div>
+    <p class="hint" data-sync-detail>${escapeHtml(snap.detail)}</p>`
+  if (!snap.loggedIn) {
+    return `<section class="block">${head}
+      <form id="sync-login" class="form">
+        <label class="field">GitHub 个人访问令牌（只需 gist 权限）
+          <input name="token" class="input" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="300" placeholder="ghp_… 或 github_pat_…" required>
+        </label>
+        <button type="submit" class="btn btn--primary btn--block">登录并同步</button>
+      </form>
+      <p class="hint"><a class="link" href="${TOKEN_HELP_URL}" target="_blank" rel="noopener noreferrer">如何创建仅含 gist 权限的令牌</a></p>
+      <p class="hint">令牌只保存在本机浏览器，不会写入账本或仓库。在另一台设备粘贴同一个令牌，即可恢复同一本账。</p>
+    </section>`
+  }
+  const gistLine = snap.gistId
+    ? `已绑定云端账本 ${escapeHtml(snap.gistId.slice(0, 8))}…`
+    : '登录后会创建或找到私人 Gist 账本'
+  return `<section class="block">${head}
+    <p class="hint">${gistLine}</p>
+    <div class="stack">
+      <button type="button" class="btn btn--primary btn--block" id="btn-sync-now">立即同步</button>
+      <button type="button" class="btn btn--block btn--ghost" id="btn-sync-logout">退出云同步</button>
+    </div>
+    <p class="hint">在另一台设备粘贴同一个令牌，即可恢复同一本账。多台设备同时改账时，以较新的保存时间为准。</p>
+  </section>`
+}
+
 function renderMe() {
   const catsE = categories('expense').map((c) =>
     `<button type="button" class="chip" data-arch-cat="${c.id}">${c.icon || ''} ${escapeHtml(c.name)}</button>`
@@ -245,6 +298,7 @@ function renderMe() {
   ).join('')
   return `
   <header class="page-head"><div><div class="eyebrow">设置</div><h1>我的</h1></div></header>
+  ${renderSyncCard()}
   <section class="block">
     <div class="block__head"><h2>分类管理</h2>
       <div>
@@ -265,7 +319,7 @@ function renderMe() {
       <button type="button" class="btn btn--block btn--ghost" id="btn-import">导入备份</button>
       <button type="button" class="btn btn--block btn--danger" id="btn-reset">清空本地数据</button>
     </div>
-    <p class="hint">数据保存在浏览器 localStorage（${STORAGE_KEY}），不经过 WorkBuddy 云库。</p>
+    <p class="hint">未登录时，账本只在本机 localStorage（${STORAGE_KEY}）。登录后，同一令牌可在手机和电脑打开同一本账。</p>
     <p class="hint">版本 ${BUILD}</p>
   </section>`
 }
@@ -347,10 +401,51 @@ function bindPage(page) {
     input.click()
   })
   page.querySelector('#btn-reset')?.addEventListener('click', async () => {
-    if (!(await confirmDialog('确定清空全部本地数据？此操作不可恢复。', { okText: '清空' }))) return
+    const logged = isLoggedIn()
+    const msg = logged
+      ? '确定清空全部数据？云端账本也会被覆盖成空账。'
+      : '确定清空全部本地数据？此操作不可恢复。'
+    if (!(await confirmDialog(msg, { okText: '清空' }))) return
     resetDb()
     reloadFromStorage()
     toast('已清空', 'ok')
+    render()
+  })
+  page.querySelector('#sync-login')?.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const form = e.currentTarget
+    const btn = form.querySelector('button[type="submit"]')
+    const token = new FormData(form).get('token')
+    if (btn) btn.disabled = true
+    let stayLogged = false
+    try {
+      await login(token)
+      stayLogged = true
+      toast('已登录并同步', 'ok')
+    } catch (err) {
+      stayLogged = isLoggedIn()
+      toast(err.message || '登录失败', 'err')
+    }
+    if (stayLogged) render()
+    else if (btn) btn.disabled = false
+  })
+  page.querySelector('#btn-sync-now')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget
+    btn.disabled = true
+    try {
+      await syncNow()
+      toast('同步完成', 'ok')
+      render()
+    } catch (err) {
+      toast(err.message || '同步失败', 'err')
+      paintSyncStatus()
+      btn.disabled = false
+    }
+  })
+  page.querySelector('#btn-sync-logout')?.addEventListener('click', async () => {
+    if (!(await confirmDialog('退出后本机账本仍保留，但不再上传。确定退出云同步？', { okText: '退出' }))) return
+    logout()
+    toast('已退出云同步', 'ok')
     render()
   })
 }
@@ -604,7 +699,23 @@ function openTradeSheet(side = 'buy', holding = null) {
 
 async function main() {
   setBoot('正在加载本地账本…')
+  startSync({
+    onRemote(db) {
+      state.db = db
+      if (uiReady) render()
+    },
+    onGistId(_id, db) {
+      state.db = db
+    },
+    onStatus() {
+      if (uiReady) paintSyncStatus()
+    },
+  })
   bootState()
+  if (isLoggedIn()) {
+    setBoot(navigator.onLine ? '正在从云端同步…' : '当前离线，使用本机缓存…')
+    await bootSync()
+  }
   $('#app')?.classList.remove('hidden')
   document.querySelectorAll('.tabbar__btn').forEach((b) => {
     b.addEventListener('click', () => {
@@ -614,6 +725,7 @@ async function main() {
   })
   $('#fab-add')?.addEventListener('click', () => openTxSheet())
   render()
+  uiReady = true
   hideBoot()
   try {
     await refreshAllQuotes()

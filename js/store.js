@@ -1,8 +1,15 @@
-/* localStorage 持久化 —— 不依赖任何云库 */
+/* localStorage 持久化。云同步见 sync.js，令牌不进这份账本。 */
 
 import { uid } from './util.js'
 
 const KEY = 'ledger.standalone.v1'
+
+let afterSave = null
+
+/** 本地写入成功后通知云同步。sync:false 的写入不会触发。 */
+export function setAfterSave(fn) {
+  afterSave = fn
+}
 
 const DEFAULT_CATEGORIES = [
   { kind: 'expense', name: '餐饮', icon: '🍜', color: '#f97316' },
@@ -74,7 +81,7 @@ function emptyDb() {
     holdings: [],
     holding_trades: [],
     fx: { rates: {}, at: '' },
-    meta: { created_at: now, updated_at: now },
+    meta: { created_at: now, updated_at: now, revision: 0, pristine: true },
   }
 }
 
@@ -83,7 +90,7 @@ export function loadDb() {
     const raw = localStorage.getItem(KEY)
     if (!raw) {
       const db = emptyDb()
-      saveDb(db)
+      saveDb(db, { touch: false, sync: false })
       return db
     }
     const db = JSON.parse(raw)
@@ -93,6 +100,7 @@ export function loadDb() {
     if (!db.holdings) db.holdings = []
     if (!db.holding_trades) db.holding_trades = []
     if (!db.fx) db.fx = { rates: {}, at: '' }
+    if (!db.meta || typeof db.meta !== 'object') db.meta = {}
     return db
   } catch (err) {
     console.error('loadDb failed', err)
@@ -100,10 +108,22 @@ export function loadDb() {
   }
 }
 
-export function saveDb(db) {
+/**
+ * @param {{ touch?: boolean, sync?: boolean }} [opts]
+ * touch 默认 true：推进 updated_at / revision，并取消 pristine。
+ * sync 默认 true：防抖上传到 Gist。套用云端或刷新行情时两者都关。
+ */
+export function saveDb(db, opts = {}) {
+  const touch = opts.touch !== false
+  const sync = opts.sync !== false
   db.meta = db.meta || {}
-  db.meta.updated_at = new Date().toISOString()
+  if (touch) {
+    db.meta.updated_at = new Date().toISOString()
+    db.meta.revision = (Number(db.meta.revision) || 0) + 1
+    db.meta.pristine = false
+  }
   localStorage.setItem(KEY, JSON.stringify(db))
+  if (sync) afterSave?.(db)
 }
 
 export function exportJson(db) {
@@ -122,6 +142,7 @@ export function importJson(text) {
 export function resetDb() {
   localStorage.removeItem(KEY)
   const db = emptyDb()
+  db.meta.pristine = false
   saveDb(db)
   return db
 }
