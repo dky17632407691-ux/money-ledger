@@ -1,9 +1,9 @@
 # 生活记账本 · 独立本地版
 
-纯前端静态应用，无云端后端，不依赖 WorkBuddy。数据只保存在浏览器 `localStorage`。
+纯前端静态应用，**不依赖 WorkBuddy 云库**。数据保存在浏览器 `localStorage`。
 
 - **版本**：`202611011200`
-- **localStorage 键**：`ledger.standalone.v1`
+- **源码路径（box）**：`/workspace/ledger-standalone/`
 
 ## 功能
 
@@ -18,6 +18,7 @@
 ES Module 不能可靠地用 `file://` 双击打开。请用任意静态服务器：
 
 ```bash
+cd ledger-standalone
 python -m http.server 8000
 ```
 
