@@ -1,4 +1,4 @@
-/* 生活记账本 · 独立本地版 */
+/* 生活记账本 · 本地缓存 + 可选 GitHub Gist 同步 */
 :root {
   --bg: #f1f5f9;
   --card: #ffffff;
@@ -24,6 +24,7 @@ button, input, select { font: inherit; }
 .pos { color: var(--pos); }
 .neg { color: var(--neg); }
 .hint { color: var(--muted); font-size: 12px; line-height: 1.5; margin-top: 10px; }
+.hint.neg { color: var(--neg); }
 .empty { color: var(--muted); text-align: center; padding: 28px 12px; }
 
 .boot {
@@ -121,6 +122,17 @@ button, input, select { font: inherit; }
 .btn--block { width: 100%; display: block; margin-top: 8px; }
 .btn--sm { padding: 7px 10px; font-size: 13px; border-radius: 10px; }
 .link { background: none; border: 0; color: var(--primary); cursor: pointer; font-weight: 600; padding: 0; }
+a.link { text-decoration: none; font-size: 13px; }
+.btn:disabled { opacity: .55; cursor: default; }
+.sync-pill {
+  display: inline-flex; align-items: center; font-size: 12px; font-weight: 700;
+  line-height: 1; padding: 4px 8px; border-radius: 999px; white-space: nowrap;
+}
+.sync-pill--synced { background: #dcfce7; color: #166534; }
+.sync-pill--syncing { background: #dbeafe; color: #1d4ed8; }
+.sync-pill--offline,
+.sync-pill--local { background: #e2e8f0; color: #475569; }
+.sync-pill--error { background: #fee2e2; color: #991b1b; }
 .icon-btn {
   width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--line);
   background: #fff; cursor: pointer;

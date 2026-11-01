@@ -442,7 +442,8 @@ export async function refreshAllQuotes() {
         }
       }
     }
-    persist()
+    // 行情只写本地缓存，不推进云端修订，避免刷新行情盖掉另一台设备刚记的账
+    saveDb(state.db, { touch: false, sync: false })
   } finally {
     state.refreshing = false
   }
