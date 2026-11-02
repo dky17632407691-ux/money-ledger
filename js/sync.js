@@ -4,7 +4,9 @@
  * 离线时只记 dirty，恢复联网后再拉取并按时间戳合并。
  */
 
-import { loadDb, saveDb, setAfterSave } from './store.js'
+import { getCloudSnapshot, isCloudLoggedIn, noteCloudSave } from './cloud.js'
+import { installPersistHook, registerCloudSaver, registerGistSaver } from './persist-hook.js'
+import { loadDb, saveDb } from './store.js'
 import {
   GIST_DESCRIPTION,
   GIST_FILENAME,
@@ -86,7 +88,7 @@ function formatClock(iso) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
-export function getSyncSnapshot() {
+export function getGistSnapshot() {
   const meta = readMeta()
   const loggedIn = !!meta.token
   let status = loggedIn ? uiStatus : 'local'
@@ -113,7 +115,13 @@ export function getSyncSnapshot() {
     lastError: meta.lastError,
     gistId: meta.gistId,
     dirty: meta.dirty,
+    mode: 'gist',
   }
+}
+
+export function getSyncSnapshot() {
+  if (isCloudLoggedIn()) return getCloudSnapshot()
+  return getGistSnapshot()
 }
 
 function setStatus(status, errorMsg) {
@@ -345,6 +353,7 @@ function applyCloud(db, gistId) {
 }
 
 async function reconcileInner() {
+  if (isCloudLoggedIn()) return
   if (!isLoggedIn()) return
   if (!online()) {
     setStatus('offline')
@@ -396,6 +405,7 @@ function fail(err) {
 }
 
 function noteLocalSave() {
+  if (isCloudLoggedIn()) return
   if (!isLoggedIn()) return
   localEpoch += 1
   writeMeta({ ...readMeta(), dirty: true })
@@ -436,6 +446,7 @@ function pushKeepalive() {
 }
 
 function onHidden() {
+  if (isCloudLoggedIn()) return
   if (!isLoggedIn() || !readMeta().dirty) return
   clearTimeout(timer)
   pushKeepalive()
@@ -447,15 +458,17 @@ export function startSync(hooks = {}) {
   onStatus = hooks.onStatus || null
   if (!started) {
     started = true
-    setAfterSave(() => noteLocalSave())
+    registerCloudSaver(() => isCloudLoggedIn(), () => noteCloudSave())
+    registerGistSaver(() => noteLocalSave())
+    installPersistHook()
     if (typeof window !== 'undefined' && window.addEventListener) {
       window.addEventListener('online', () => {
-        if (!isLoggedIn()) return
+        if (isCloudLoggedIn() || !isLoggedIn()) return
         clearTimeout(timer)
         enqueue(() => reconcileInner().catch(fail))
       })
       window.addEventListener('offline', () => {
-        if (!isLoggedIn()) return
+        if (isCloudLoggedIn() || !isLoggedIn()) return
         setStatus('offline')
       })
       window.addEventListener('pagehide', onHidden)
@@ -466,7 +479,7 @@ export function startSync(hooks = {}) {
           onHidden()
           return
         }
-        if (isLoggedIn() && readMeta().dirty && online()) {
+        if (!isCloudLoggedIn() && isLoggedIn() && readMeta().dirty && online()) {
           clearTimeout(timer)
           enqueue(() => reconcileInner().catch(fail))
         }

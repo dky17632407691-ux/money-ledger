@@ -1,4 +1,4 @@
-/* localStorage 持久化。云同步见 sync.js，令牌不进这份账本。 */
+/* localStorage 持久化，当作本机缓存。云账号见 cloud.js，Gist 见 sync.js。密码和令牌不进这份账本。 */
 
 import { uid } from './util.js'
 
@@ -111,7 +111,7 @@ export function loadDb() {
 /**
  * @param {{ touch?: boolean, sync?: boolean }} [opts]
  * touch 默认 true：推进 updated_at / revision，并取消 pristine。
- * sync 默认 true：防抖上传到 Gist。套用云端或刷新行情时两者都关。
+ * sync 默认 true：防抖上传。已登录云账号时走账号云，否则走 Gist。套用云端或刷新行情时两者都关。
  */
 export function saveDb(db, opts = {}) {
   const touch = opts.touch !== false

@@ -2,6 +2,7 @@
 
 export const GIST_DESCRIPTION = 'money-ledger-cloud-v1'
 export const GIST_FILENAME = 'money-ledger.json'
+export const ACCOUNT_CLOUD_APP = 'money-ledger-account-v1'
 
 export function isPristine(db) {
   return db?.meta?.pristine === true
@@ -33,7 +34,7 @@ export function chooseWinner(local, cloud) {
   return 'same'
 }
 
-/** 深拷贝账本并写入云端标识。绝不放入令牌。 */
+/** 深拷贝账本并写入 Gist 标识。绝不放入令牌。 */
 export function withCloudMeta(db, gistId) {
   const copy = JSON.parse(JSON.stringify(db))
   copy.meta = copy.meta && typeof copy.meta === 'object' ? copy.meta : {}
@@ -41,6 +42,20 @@ export function withCloudMeta(db, gistId) {
     app: GIST_DESCRIPTION,
     gist_id: gistId || null,
   }
+  return copy
+}
+
+/** 深拷贝账本并写入云账号标识。绝不放入密码或会话令牌。 */
+export function withAccountCloudMeta(db, username) {
+  const copy = JSON.parse(JSON.stringify(db))
+  copy.meta = copy.meta && typeof copy.meta === 'object' ? copy.meta : {}
+  const prev = copy.meta.cloud && typeof copy.meta.cloud === 'object' ? copy.meta.cloud : {}
+  const cloud = {
+    app: ACCOUNT_CLOUD_APP,
+    username: username || null,
+  }
+  if (prev.gist_id) cloud.gist_id = prev.gist_id
+  copy.meta.cloud = cloud
   return copy
 }
 
