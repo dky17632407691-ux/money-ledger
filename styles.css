@@ -1,4 +1,4 @@
-/* 生活记账本 · 本地缓存 + 可选 GitHub Gist 同步 */
+/* 生活记账本 · 本地缓存 + 云账号同步，Gist 可选 */
 :root {
   --bg: #f1f5f9;
   --card: #ffffff;
@@ -69,6 +69,16 @@ button, input, select { font: inherit; }
 .stat__value.sm { font-size: 13px; font-weight: 500; }
 
 .block { margin-top: 8px; margin-bottom: 18px; }
+.block--card {
+  background: var(--card); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow);
+}
+.account-name { margin: 4px 0 8px; font-size: 18px; font-weight: 700; }
+.hint--warn { color: #9a3412; }
+.details { margin: 0 0 14px; }
+.details summary { cursor: pointer; font-weight: 700; }
+.details .form { margin-top: 10px; }
+.seg--2 { grid-template-columns: 1fr 1fr; }
+code { font-size: 12px; }
 .block__head {
   display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
 }

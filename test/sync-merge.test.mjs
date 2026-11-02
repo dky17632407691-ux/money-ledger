@@ -1,7 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  chooseWinner, isPlausibleToken, normalizeToken, withCloudMeta, GIST_DESCRIPTION,
+  chooseWinner, isPlausibleToken, normalizeToken, withCloudMeta, withAccountCloudMeta,
+  GIST_DESCRIPTION, ACCOUNT_CLOUD_APP,
 } from '../js/sync-merge.js'
 
 function db(extra) {
@@ -50,6 +51,15 @@ test('cloud meta is only the gist id, not a token', () => {
   assert.deepEqual(stamped.meta.cloud, { app: GIST_DESCRIPTION, gist_id: 'abc123' })
   assert.equal(JSON.stringify(stamped).includes('ghp_'), false)
   assert.equal(JSON.stringify(stamped).includes('github_pat_'), false)
+})
+
+test('account cloud meta keeps the username and drops secrets', () => {
+  const stamped = withAccountCloudMeta(db({ meta: { updated_at: '2026-11-01T00:00:00.000Z', revision: 1, pristine: false, cloud: { gist_id: 'g1', token: 'ghp_secret' } } }), 'alice')
+  assert.equal(stamped.meta.cloud.app, ACCOUNT_CLOUD_APP)
+  assert.equal(stamped.meta.cloud.username, 'alice')
+  assert.equal(stamped.meta.cloud.gist_id, 'g1')
+  assert.equal(JSON.stringify(stamped).includes('ghp_'), false)
+  assert.equal(JSON.stringify(stamped).includes('password'), false)
 })
 
 test('token paste is normalized and shape-checked', () => {

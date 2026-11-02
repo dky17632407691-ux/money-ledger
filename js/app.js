@@ -18,10 +18,16 @@ import {
 import { toast, confirmDialog, openSheet, setBoot, hideBoot } from './ui.js'
 import { exportJson, importJson, resetDb, STORAGE_KEY } from './store.js'
 import {
-  bootSync, getSyncSnapshot, isLoggedIn, login, logout, startSync, syncNow,
+  bootCloud, getApiBase, getCloudSnapshot, isCloudLoggedIn, loginCloud, logoutCloud,
+  registerCloud, setApiBase, startCloud, syncCloudNow,
+} from './cloud.js'
+import {
+  bootSync, getGistSnapshot, getSyncSnapshot, isLoggedIn, login as gistLogin,
+  logout as gistLogout, startSync, syncNow as gistSyncNow,
 } from './sync.js'
 
-const BUILD = '202611011430'
+const BUILD = '202611020430'
+let accountMode = 'login'
 const TOKEN_HELP_URL = 'https://github.com/settings/tokens/new?scopes=gist&description=money-ledger-cloud'
 
 let uiReady = false
@@ -46,16 +52,32 @@ function render() {
   syncNav()
 }
 
-function paintSyncStatus() {
-  const snap = getSyncSnapshot()
-  document.querySelectorAll('[data-sync-pill]').forEach((el) => {
+function paintPills(selector, snap) {
+  document.querySelectorAll(selector).forEach((el) => {
     el.textContent = snap.label
     el.className = `sync-pill sync-pill--${snap.status}`
   })
-  document.querySelectorAll('[data-sync-detail]').forEach((el) => {
+}
+
+function paintDetail(selector, snap) {
+  document.querySelectorAll(selector).forEach((el) => {
     el.textContent = snap.detail
     el.classList.toggle('neg', snap.status === 'error')
   })
+}
+
+function paintSyncStatus() {
+  const snap = getSyncSnapshot()
+  paintPills('[data-sync-pill]', snap)
+  paintDetail('[data-sync-detail]', snap)
+  paintPills('[data-cloud-pill]', getCloudSnapshot())
+  paintDetail('[data-cloud-detail]', getCloudSnapshot())
+  paintPills('[data-gist-pill]', getGistSnapshot())
+  paintDetail('[data-gist-detail]', getGistSnapshot())
+}
+
+function hostOf(base) {
+  try { return new URL(base).host } catch { return '' }
 }
 
 function syncPill() {
@@ -259,33 +281,92 @@ function renderStats() {
   </section>`
 }
 
-function renderSyncCard() {
-  const snap = getSyncSnapshot()
+function renderAccountCard() {
+  const snap = getCloudSnapshot()
+  const base = getApiBase()
+  const host = hostOf(base)
   const head = `
-    <div class="block__head"><h2>云同步</h2>${syncPill()}</div>
-    <p class="hint" data-sync-detail>${escapeHtml(snap.detail)}</p>`
+    <div class="block__head"><h2>云账号</h2><span data-cloud-pill class="sync-pill sync-pill--${snap.status}">${escapeHtml(snap.label)}</span></div>
+    <p class="hint" data-cloud-detail>${escapeHtml(snap.detail)}</p>`
   if (!snap.loggedIn) {
-    return `<section class="block">${head}
+    const login = accountMode !== 'register'
+    return `<section class="block block--card">${head}
+      <div class="seg seg--2" role="tablist">
+        <button type="button" class="seg__btn ${login ? 'is-active' : ''}" data-account-mode="login">登录</button>
+        <button type="button" class="seg__btn ${login ? '' : 'is-active'}" data-account-mode="register">注册</button>
+      </div>
+      <form id="account-form" class="form">
+        <label class="field">用户名
+          <input name="username" class="input" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="32" required placeholder="字母、数字或中文">
+        </label>
+        <label class="field">密码
+          <input name="password" class="input" type="password" autocomplete="${login ? 'current-password' : 'new-password'}" minlength="6" maxlength="128" required>
+        </label>
+        ${login ? '' : `<label class="field">再输入一次密码
+          <input name="password2" class="input" type="password" autocomplete="new-password" minlength="6" maxlength="128" required>
+        </label>`}
+        ${login
+          ? `<label class="check"><input type="checkbox" name="remember"> 在这台设备记住登录</label>
+             <p class="hint">无痕 / 私人浏览关掉之后，勾选也不会留下密码。下次打开，重新输入用户名和密码即可载入同一本云端账。</p>`
+          : `<p class="hint hint--warn">没有邮箱找回。请务必记住用户名和密码，否则云端账本无法再打开。</p>`}
+        <button type="submit" class="btn btn--primary btn--block">${login ? '登录并同步' : '注册并同步'}</button>
+      </form>
+      <p class="hint">云端：${escapeHtml(host || '未配置，部署 Worker 后才能跨设备恢复')}</p>
+      <details class="details" ${base ? '' : 'open'}>
+        <summary>服务器地址</summary>
+        <form id="api-form" class="form">
+          <label class="field">Worker 地址
+            <input name="api" class="input" type="url" value="${escapeHtml(base)}" placeholder="https://money-ledger-api.xxx.workers.dev" spellcheck="false" autocapitalize="off">
+          </label>
+          <button type="submit" class="btn btn--ghost btn--block">保存地址</button>
+        </form>
+        <p class="hint">长期使用请把地址写进 <code>js/cloud-config.js</code>。只填在这里时，普通浏览会记住；无痕窗口关掉后要再填一次，或使用页面里写死的默认地址。</p>
+      </details>
+    </section>`
+  }
+  return `<section class="block block--card">${head}
+    <p class="account-name">已登录 ${escapeHtml(snap.username)}</p>
+    <div class="stack">
+      <button type="button" class="btn btn--primary btn--block" id="btn-cloud-sync">立即同步</button>
+      <button type="button" class="btn btn--block btn--ghost" id="btn-cloud-logout">退出登录</button>
+    </div>
+    <p class="hint">换手机、换浏览器，或重新打开无痕窗口时，输入同一个用户名和密码，就会载入这本云端账。本机只在打开期间做缓存。</p>
+    <p class="hint">云端：${escapeHtml(host || '未配置')}</p>
+  </section>`
+}
+
+function renderGistCard() {
+  const snap = getGistSnapshot()
+  const cloudOn = isCloudLoggedIn()
+  const head = `
+    <div class="block__head"><h2>GitHub Gist</h2><span data-gist-pill class="sync-pill sync-pill--${snap.status}">${escapeHtml(snap.label)}</span></div>
+    <p class="hint" data-gist-detail>${escapeHtml(snap.detail)}</p>`
+  const paused = cloudOn
+    ? '<p class="hint">已登录云账号时，Gist 不会自动上传。下面只用于把旧的 Gist 账本导入当前云账号。</p>'
+    : '<p class="hint">这是可选的高级方式。令牌只在本机，无痕模式关掉后就要重新粘贴。日常同步请用上面的用户名和密码。</p>'
+  if (!snap.loggedIn) {
+    return `<section class="block block--card">${head}
+      ${paused}
       <form id="sync-login" class="form">
         <label class="field">GitHub 个人访问令牌（只需 gist 权限）
           <input name="token" class="input" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="300" placeholder="ghp_… 或 github_pat_…" required>
         </label>
-        <button type="submit" class="btn btn--primary btn--block">登录并同步</button>
+        <button type="submit" class="btn btn--primary btn--block">${cloudOn ? '从 Gist 导入' : '登录并同步'}</button>
       </form>
       <p class="hint"><a class="link" href="${TOKEN_HELP_URL}" target="_blank" rel="noopener noreferrer">如何创建仅含 gist 权限的令牌</a></p>
-      <p class="hint">令牌只保存在本机浏览器，不会写入账本或仓库。在另一台设备粘贴同一个令牌，即可恢复同一本账。</p>
     </section>`
   }
   const gistLine = snap.gistId
     ? `已绑定云端账本 ${escapeHtml(snap.gistId.slice(0, 8))}…`
     : '登录后会创建或找到私人 Gist 账本'
-  return `<section class="block">${head}
+  return `<section class="block block--card">${head}
+    ${paused}
     <p class="hint">${gistLine}</p>
     <div class="stack">
-      <button type="button" class="btn btn--primary btn--block" id="btn-sync-now">立即同步</button>
-      <button type="button" class="btn btn--block btn--ghost" id="btn-sync-logout">退出云同步</button>
+      <button type="button" class="btn btn--primary btn--block" id="btn-sync-now">${cloudOn ? '从 Gist 合并' : '立即同步'}</button>
+      <button type="button" class="btn btn--block btn--ghost" id="btn-sync-logout">退出 Gist</button>
     </div>
-    <p class="hint">在另一台设备粘贴同一个令牌，即可恢复同一本账。多台设备同时改账时，以较新的保存时间为准。</p>
+    <p class="hint">多台设备同时改账时，以较新的保存时间为准。</p>
   </section>`
 }
 
@@ -298,7 +379,11 @@ function renderMe() {
   ).join('')
   return `
   <header class="page-head"><div><div class="eyebrow">设置</div><h1>我的</h1></div></header>
-  ${renderSyncCard()}
+  ${renderAccountCard()}
+  <details class="details details--block" ${!isCloudLoggedIn() && isLoggedIn() ? 'open' : ''}>
+    <summary>高级：GitHub Gist（可选）</summary>
+    ${renderGistCard()}
+  </details>
   <section class="block">
     <div class="block__head"><h2>分类管理</h2>
       <div>
@@ -319,7 +404,7 @@ function renderMe() {
       <button type="button" class="btn btn--block btn--ghost" id="btn-import">导入备份</button>
       <button type="button" class="btn btn--block btn--danger" id="btn-reset">清空本地数据</button>
     </div>
-    <p class="hint">未登录时，账本只在本机 localStorage（${STORAGE_KEY}）。登录后，同一令牌可在手机和电脑打开同一本账。</p>
+    <p class="hint">未登录时，账本只在本机 localStorage（${STORAGE_KEY}）。用云账号登录后，同一用户名和密码可在手机无痕模式恢复同一本账。</p>
     <p class="hint">版本 ${BUILD}</p>
   </section>`
 }
@@ -401,14 +486,73 @@ function bindPage(page) {
     input.click()
   })
   page.querySelector('#btn-reset')?.addEventListener('click', async () => {
-    const logged = isLoggedIn()
+    const logged = isCloudLoggedIn() || isLoggedIn()
     const msg = logged
-      ? '确定清空全部数据？云端账本也会被覆盖成空账。'
+      ? '确定清空全部数据？当前登录的云端账本也会被覆盖成空账。'
       : '确定清空全部本地数据？此操作不可恢复。'
     if (!(await confirmDialog(msg, { okText: '清空' }))) return
     resetDb()
     reloadFromStorage()
     toast('已清空', 'ok')
+    render()
+  })
+  page.querySelectorAll('[data-account-mode]').forEach((b) => {
+    b.addEventListener('click', () => {
+      accountMode = b.dataset.accountMode === 'register' ? 'register' : 'login'
+      render()
+    })
+  })
+  page.querySelector('#account-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const form = e.currentTarget
+    const btn = form.querySelector('button[type="submit"]')
+    const fd = new FormData(form)
+    if (btn) btn.disabled = true
+    try {
+      if (accountMode === 'register') {
+        if (fd.get('password') !== fd.get('password2')) throw new Error('两次密码不一致')
+        await registerCloud(fd.get('username'), fd.get('password'))
+        toast('注册成功，已开始同步', 'ok')
+      } else {
+        await loginCloud(fd.get('username'), fd.get('password'), { remember: !!fd.get('remember') })
+        toast('已登录并同步', 'ok')
+      }
+      render()
+    } catch (err) {
+      toast(err.message || '登录失败', 'err')
+      if (isCloudLoggedIn()) render()
+      else if (btn) btn.disabled = false
+    }
+  })
+  page.querySelector('#api-form')?.addEventListener('submit', (e) => {
+    e.preventDefault()
+    try {
+      setApiBase(new FormData(e.currentTarget).get('api'), { persist: true })
+      toast(getApiBase() ? '服务器地址已保存' : '已改回页面默认地址', 'ok')
+      render()
+    } catch (err) {
+      toast(err.message || '地址无效', 'err')
+    }
+  })
+  page.querySelector('#btn-cloud-sync')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget
+    btn.disabled = true
+    try {
+      await syncCloudNow()
+      toast('同步完成', 'ok')
+      render()
+    } catch (err) {
+      toast(err.message || '同步失败', 'err')
+      if (isCloudLoggedIn()) {
+        paintSyncStatus()
+        btn.disabled = false
+      } else render()
+    }
+  })
+  page.querySelector('#btn-cloud-logout')?.addEventListener('click', async () => {
+    if (!(await confirmDialog('退出后本机账本仍保留，但不再上传。无痕窗口关掉后，要用同一用户名和密码重新登录。', { okText: '退出' }))) return
+    logoutCloud()
+    toast('已退出登录', 'ok')
     render()
   })
   page.querySelector('#sync-login')?.addEventListener('submit', async (e) => {
@@ -417,13 +561,15 @@ function bindPage(page) {
     const btn = form.querySelector('button[type="submit"]')
     const token = new FormData(form).get('token')
     if (btn) btn.disabled = true
+    const cloudOn = isCloudLoggedIn()
     let stayLogged = false
     try {
-      await login(token)
+      await gistLogin(token)
+      if (cloudOn) await syncCloudNow()
       stayLogged = true
-      toast('已登录并同步', 'ok')
+      toast(cloudOn ? '已从 Gist 导入到云账号' : '已登录并同步', 'ok')
     } catch (err) {
-      stayLogged = isLoggedIn()
+      stayLogged = isLoggedIn() || isCloudLoggedIn()
       toast(err.message || '登录失败', 'err')
     }
     if (stayLogged) render()
@@ -433,7 +579,8 @@ function bindPage(page) {
     const btn = e.currentTarget
     btn.disabled = true
     try {
-      await syncNow()
+      await gistSyncNow()
+      if (isCloudLoggedIn()) await syncCloudNow()
       toast('同步完成', 'ok')
       render()
     } catch (err) {
@@ -443,9 +590,9 @@ function bindPage(page) {
     }
   })
   page.querySelector('#btn-sync-logout')?.addEventListener('click', async () => {
-    if (!(await confirmDialog('退出后本机账本仍保留，但不再上传。确定退出云同步？', { okText: '退出' }))) return
-    logout()
-    toast('已退出云同步', 'ok')
+    if (!(await confirmDialog('退出后本机账本仍保留，但不再上传到 Gist。', { okText: '退出' }))) return
+    gistLogout()
+    toast('已退出 Gist', 'ok')
     render()
   })
 }
@@ -699,11 +846,21 @@ function openTradeSheet(side = 'buy', holding = null) {
 
 async function main() {
   setBoot('正在加载本地账本…')
-  startSync({
-    onRemote(db) {
-      state.db = db
+  const onRemote = (db) => {
+    state.db = db
+    if (uiReady) render()
+  }
+  startCloud({
+    onRemote,
+    onStatus() {
+      if (uiReady) paintSyncStatus()
+    },
+    onAuthLost() {
       if (uiReady) render()
     },
+  })
+  startSync({
+    onRemote,
     onGistId(_id, db) {
       state.db = db
     },
@@ -712,8 +869,11 @@ async function main() {
     },
   })
   bootState()
-  if (isLoggedIn()) {
+  if (isCloudLoggedIn()) {
     setBoot(navigator.onLine ? '正在从云端同步…' : '当前离线，使用本机缓存…')
+    await bootCloud()
+  } else if (isLoggedIn()) {
+    setBoot(navigator.onLine ? '正在从 Gist 同步…' : '当前离线，使用本机缓存…')
     await bootSync()
   }
   $('#app')?.classList.remove('hidden')
