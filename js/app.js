@@ -26,7 +26,7 @@ import {
   logout as gistLogout, startSync, syncNow as gistSyncNow,
 } from './sync.js'
 
-const BUILD = '202611020430'
+const BUILD = '202611022353'
 let accountMode = 'login'
 const TOKEN_HELP_URL = 'https://github.com/settings/tokens/new?scopes=gist&description=money-ledger-cloud'
 
