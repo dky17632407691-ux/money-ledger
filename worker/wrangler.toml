@@ -3,12 +3,11 @@ main = "src/index.js"
 compatibility_date = "2026-11-02"
 workers_dev = true
 
-# 先运行：npx wrangler d1 create money-ledger
-# 把打印出来的 database_id 填到下面，再：
+# 线上 D1。以后改 Worker 再 deploy 时继续用这个库，不要新建。
 #   npx wrangler d1 migrations apply money-ledger --remote
 #   npx wrangler deploy
 [[d1_databases]]
 binding = "DB"
 database_name = "money-ledger"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "5d20c700-ce31-41c7-90f5-9bc67302c940"
 migrations_dir = "migrations"

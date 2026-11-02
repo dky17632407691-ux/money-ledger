@@ -2,19 +2,18 @@
 
 静态页面，部署在 GitHub Pages。账本先写在浏览器 `localStorage`（本机缓存）。要用手机无痕 / 私人浏览长期打开同一本账，请用 **用户名 + 密码** 登录云账号：关掉标签后缓存会消失，重新输入同一组账号密码即可从云端拉回。
 
-- **版本 / BUILD**：`202611020430`
+- **版本 / BUILD**：`202611022353`
 - **站点**：https://dky17632407691-ux.github.io/money-ledger/
-- **云端 API**：还没有公网地址。页面默认读 `js/cloud-config.js` 里的 `DEFAULT_API_BASE`（当前为空）。部署下面的 Worker 后，把打印出来的 `*.workers.dev` 地址填进去。
+- **云端 API**：https://money-ledger-api.dky17632407691.workers.dev （写在 `js/cloud-config.js` 的 `DEFAULT_API_BASE`，无末尾斜杠）
 
 GitHub Gist 同步还留在「我的 → 高级」，给原来已经用令牌的人。无痕模式请用云账号，不要靠把 PAT 存在 localStorage。
 
 ## 用户怎么用
 
-1. 先按下面的步骤部署一次 Cloudflare Worker，并把地址写进 `js/cloud-config.js`，推到 `main`。这一步只做一次。
-2. 在**已经有账**的电脑上打开站点 → **我的** → **注册**。自己定一个用户名和密码（至少 6 位，建议更长）。没有邮箱找回，忘掉就打不开云端账。
-3. 看到「已同步」后，用手机 Safari **私人浏览**打开同一个网址。
-4. **我的** → **登录**，输入同一个用户名和密码。账本会从云端下来。
-5. 私人窗口关掉之后，本机不留密码。下次打开，再登录一次即可。
+1. 在**已经有账**的电脑上打开站点 → **我的** → **注册**。自己定一个用户名和密码（至少 6 位，建议更长）。没有邮箱找回，忘掉就打不开云端账。云端地址已经写在页面里，私人浏览不用再填。
+2. 看到「已同步」后，用手机 Safari **私人浏览**打开同一个网址。
+3. **我的** → **登录**，输入同一个用户名和密码。账本会从云端下来。
+4. 私人窗口关掉之后，本机不留密码。下次打开，再登录一次即可。
 
 普通浏览可以勾选「在这台设备记住登录」。那只记住会话令牌，不记住密码；清网站数据或换无痕窗口后，仍然要重新输入密码。
 
@@ -22,28 +21,16 @@ GitHub Gist 同步还留在「我的 → 高级」，给原来已经用令牌的
 
 ## 部署 Cloudflare Worker（免费）
 
-仓库里的 `worker/` 是 Workers + D1。当前环境没有 Cloudflare 账号，所以没有替你创建或部署。需要你自己有一个免费的 Cloudflare 账号（不用绑信用卡）。
+Worker 已经在跑：https://money-ledger-api.dky17632407691.workers.dev 。D1 id 写在 `worker/wrangler.toml`（`5d20c700-ce31-41c7-90f5-9bc67302c940`）。改页面默认地址不用重新部署 Worker。
+
+以后如果改了 `worker/` 里的代码，再用已有的库发布，不要新建数据库：
 
 ```bash
 cd worker
 npx wrangler login
-npx wrangler d1 create money-ledger
-```
-
-把命令打印的 `database_id` 填进 `worker/wrangler.toml` 的 `database_id`（替换全 0 的占位符）。然后：
-
-```bash
 npx wrangler d1 migrations apply money-ledger --remote
 npx wrangler deploy
 ```
-
-`deploy` 会打印类似 `https://money-ledger-api.<你的子域>.workers.dev` 的地址。把这个地址（不要末尾斜杠）写进 `js/cloud-config.js`：
-
-```js
-export const DEFAULT_API_BASE = 'https://money-ledger-api.<你的子域>.workers.dev'
-```
-
-提交并推到 `main` 后，GitHub Pages 会更新。私人浏览不依赖 localStorage，所以地址必须写在这个文件里，不要只在页面上临时保存。
 
 页面上的「服务器地址」可以临时指向别的 Worker，方便你还没改代码时试一次。无痕窗口关掉后这个临时地址会丢。
 
